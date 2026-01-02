@@ -17,12 +17,24 @@ export const leagues = pgTable("leagues", {
   seasonYear: integer("season_year").notNull(),
   totalDues: decimal("total_dues", { precision: 10, scale: 2 }).notNull().default("0"),
   settings: jsonb("settings").$type<{
-    weeklyPayoutAmount: number;
-    seasonDues: number;
+    entryFee: number;
+    weeklyHighScorePrize: number;
+    weeklyLowScoreFee: number;
+    weeklyLowScoreFeeEnabled: boolean;
     payoutRules: string;
-    lowestScorerFee: number;
-    lowestScorerFeeEnabled: boolean;
-  }>().default({ weeklyPayoutAmount: 0, seasonDues: 0, payoutRules: "", lowestScorerFee: 0, lowestScorerFeeEnabled: false }),
+    // Legacy fields for backwards compatibility
+    weeklyPayoutAmount?: number;
+    seasonDues?: number;
+    lowestScorerFee?: number;
+    lowestScorerFeeEnabled?: boolean;
+  }>().default({ 
+    entryFee: 0, 
+    weeklyHighScorePrize: 0, 
+    weeklyLowScoreFee: 0, 
+    weeklyLowScoreFeeEnabled: false,
+    payoutRules: "" 
+  }),
+  lastScoreSync: timestamp("last_score_sync"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -43,6 +55,7 @@ export const leagueMembers = pgTable("league_members", {
   userId: text("user_id").notNull(),
   role: text("role").notNull().default("member"), // 'commissioner', 'member'
   teamName: text("team_name"),
+  externalTeamId: text("external_team_id"), // ESPN/Yahoo team ID for score syncing
   paidStatus: text("paid_status").notNull().default("unpaid"), // 'paid', 'unpaid', 'partial'
   joinedAt: timestamp("joined_at").defaultNow(),
 });
@@ -135,6 +148,7 @@ export const weeklyScores = pgTable("weekly_scores", {
   userId: text("user_id").notNull(),
   week: integer("week").notNull(),
   score: decimal("score", { precision: 10, scale: 2 }).notNull(),
+  source: text("source").notNull().default("manual"), // 'manual', 'espn', 'yahoo', 'auto'
   createdAt: timestamp("created_at").defaultNow(),
 });
 

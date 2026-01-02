@@ -328,30 +328,33 @@ export async function registerRoutes(
       const results: any = { week: Number(week), processed: [] };
 
       // Process highest scorer payout if enabled
-      if (league.settings?.weeklyPayoutAmount && league.settings.weeklyPayoutAmount > 0) {
+      const weeklyPrize = league.settings?.weeklyHighScorePrize || league.settings?.weeklyPayoutAmount || 0;
+      if (weeklyPrize > 0) {
         const highestScorer = scores[0];
         const payout = await storage.createPayout({
           leagueId,
           userId: highestScorer.userId,
-          amount: String(league.settings.weeklyPayoutAmount),
+          amount: String(weeklyPrize),
           reason: 'weekly_high_score',
           week: Number(week),
           status: 'approved'
         });
-        results.processed.push({ type: 'payout', userId: highestScorer.userId, amount: league.settings.weeklyPayoutAmount });
+        results.processed.push({ type: 'payout', userId: highestScorer.userId, amount: weeklyPrize });
       }
 
       // Process lowest scorer penalty if enabled
-      if (league.settings?.lowestScorerFeeEnabled && league.settings.lowestScorerFee > 0) {
+      const lpsEnabled = league.settings?.weeklyLowScoreFeeEnabled || league.settings?.lowestScorerFeeEnabled || false;
+      const lpsFee = league.settings?.weeklyLowScoreFee || league.settings?.lowestScorerFee || 0;
+      if (lpsEnabled && lpsFee > 0) {
         const lowestScorer = scores[scores.length - 1];
         const payment = await storage.createPayment({
           leagueId,
           userId: lowestScorer.userId,
-          amount: String(league.settings.lowestScorerFee),
+          amount: String(lpsFee),
           status: 'pending',
           stripePaymentIntentId: null
         });
-        results.processed.push({ type: 'penalty', userId: lowestScorer.userId, amount: league.settings.lowestScorerFee });
+        results.processed.push({ type: 'penalty', userId: lowestScorer.userId, amount: lpsFee });
       }
       
       res.json({ success: true, results });
@@ -373,15 +376,15 @@ export async function registerRoutes(
 
       // Get league settings to check if lowest scorer fee is enabled
       const league = await storage.getLeague(leagueId);
-      const lowestScorerFeeEnabled = league?.settings?.lowestScorerFeeEnabled || false;
-      const lowestScorerFee = league?.settings?.lowestScorerFee || 0;
+      const weeklyLowScoreFeeEnabled = league?.settings?.weeklyLowScoreFeeEnabled || league?.settings?.lowestScorerFeeEnabled || false;
+      const weeklyLowScoreFee = league?.settings?.weeklyLowScoreFee || league?.settings?.lowestScorerFee || 0;
       
       res.json({ 
         scores, 
         highestScorer, 
         lowestScorer,
-        lowestScorerFeeEnabled,
-        lowestScorerFee
+        weeklyLowScoreFeeEnabled,
+        weeklyLowScoreFee
       });
     } catch (err) {
       console.error("Error fetching scores:", err);

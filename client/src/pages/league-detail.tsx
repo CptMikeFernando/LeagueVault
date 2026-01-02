@@ -180,12 +180,12 @@ export default function LeagueDetail() {
                         <div>
                           <p className="font-medium">Team: {currentMember.teamName}</p>
                           <p className="text-sm text-muted-foreground">
-                            {currentMember.paidStatus === 'paid' ? "You're all paid up!" : `Dues owed: $${league.settings.seasonDues}`}
+                            {currentMember.paidStatus === 'paid' ? "You're all paid up!" : `Dues owed: $${league.settings?.entryFee || league.settings?.seasonDues || 0}`}
                           </p>
                         </div>
                       </div>
                       {currentMember.paidStatus !== 'paid' && (
-                         <PayDuesDialog league={league} userId={user!.id} amount={league.settings.seasonDues} />
+                         <PayDuesDialog league={league} userId={user!.id} amount={league.settings?.entryFee || league.settings?.seasonDues || 0} />
                       )}
                     </div>
                   ) : (
@@ -229,11 +229,11 @@ export default function LeagueDetail() {
                 <CardContent className="space-y-4">
                   <div className="flex justify-between text-sm pb-2 border-b">
                     <span className="text-muted-foreground">Entry Fee</span>
-                    <span className="font-mono font-medium">${league.settings.seasonDues}</span>
+                    <span className="font-mono font-medium">${league.settings?.entryFee || league.settings?.seasonDues || 0}</span>
                   </div>
                   <div className="flex justify-between text-sm pb-2 border-b">
-                    <span className="text-muted-foreground">Weekly Prize</span>
-                    <span className="font-mono font-medium">${league.settings.weeklyPayoutAmount}</span>
+                    <span className="text-muted-foreground">Weekly HPS Prize</span>
+                    <span className="font-mono font-medium">${league.settings?.weeklyHighScorePrize || league.settings?.weeklyPayoutAmount || 0}</span>
                   </div>
                   <div className="bg-muted p-3 rounded-md text-sm text-muted-foreground">
                     <p className="font-medium mb-1 text-foreground">Distribution:</p>

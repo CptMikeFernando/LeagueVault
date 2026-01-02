@@ -77,12 +77,12 @@ export default function Dashboard() {
                       </span>
                       <span className="font-mono font-bold">${Number(league.totalDues).toLocaleString()}</span>
                     </div>
-                    {league.settings?.weeklyPayoutAmount && league.settings.weeklyPayoutAmount > 0 && (
+                    {(league.settings?.weeklyHighScorePrize || league.settings?.weeklyPayoutAmount) && (league.settings.weeklyHighScorePrize || league.settings.weeklyPayoutAmount || 0) > 0 && (
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-muted-foreground flex items-center gap-2">
                           <Trophy className="w-4 h-4" /> Weekly Prize
                         </span>
-                        <span className="font-mono">${league.settings?.weeklyPayoutAmount}</span>
+                        <span className="font-mono">${league.settings?.weeklyHighScorePrize || league.settings?.weeklyPayoutAmount}</span>
                       </div>
                     )}
                   </div>

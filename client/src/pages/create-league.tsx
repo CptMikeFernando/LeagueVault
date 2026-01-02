@@ -16,11 +16,11 @@ import { Switch } from "@/components/ui/switch";
 const formSchema = z.object({
   name: z.string().min(3, "Name must be at least 3 characters"),
   seasonYear: z.coerce.number().min(2020),
-  seasonDues: z.coerce.number().min(0),
-  weeklyPayoutAmount: z.coerce.number().min(0),
+  entryFee: z.coerce.number().min(0),
+  weeklyHighScorePrize: z.coerce.number().min(0),
   payoutRules: z.string().optional(),
-  lowestScorerFeeEnabled: z.boolean().optional(),
-  lowestScorerFee: z.coerce.number().min(0).optional(),
+  weeklyLowScoreFeeEnabled: z.boolean().optional(),
+  weeklyLowScoreFee: z.coerce.number().min(0).optional(),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -34,14 +34,14 @@ export default function CreateLeague() {
     resolver: zodResolver(formSchema),
     defaultValues: {
       seasonYear: new Date().getFullYear(),
-      seasonDues: 50,
-      weeklyPayoutAmount: 0,
-      lowestScorerFeeEnabled: false,
-      lowestScorerFee: 5,
+      entryFee: 50,
+      weeklyHighScorePrize: 0,
+      weeklyLowScoreFeeEnabled: false,
+      weeklyLowScoreFee: 5,
     }
   });
 
-  const lowestScorerFeeEnabled = watch("lowestScorerFeeEnabled");
+  const weeklyLowScoreFeeEnabled = watch("weeklyLowScoreFeeEnabled");
 
   const onSubmit = (data: FormData) => {
     if (!user) return;
@@ -52,11 +52,11 @@ export default function CreateLeague() {
       commissionerId: user.id,
       platform: "custom",
       settings: {
-        seasonDues: data.seasonDues,
-        weeklyPayoutAmount: data.weeklyPayoutAmount,
+        entryFee: data.entryFee,
+        weeklyHighScorePrize: data.weeklyHighScorePrize,
         payoutRules: data.payoutRules || "",
-        lowestScorerFeeEnabled: data.lowestScorerFeeEnabled || false,
-        lowestScorerFee: data.lowestScorerFee || 0,
+        weeklyLowScoreFeeEnabled: data.weeklyLowScoreFeeEnabled || false,
+        weeklyLowScoreFee: data.weeklyLowScoreFee || 0,
       },
     }, {
       onSuccess: () => setLocation("/")
@@ -109,31 +109,33 @@ export default function CreateLeague() {
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <Label htmlFor="seasonDues">Entry Fee (Per Person)</Label>
+                  <Label htmlFor="entryFee">Entry Fee (Per Person)</Label>
                   <div className="relative">
                     <span className="absolute left-3 top-2.5 text-muted-foreground">$</span>
                     <Input 
-                      id="seasonDues" 
+                      id="entryFee" 
                       type="number" 
                       className="pl-8 font-mono"
-                      {...register("seasonDues")} 
+                      {...register("entryFee")} 
+                      data-testid="input-entry-fee"
                     />
                   </div>
                   <p className="text-xs text-muted-foreground">Total required payment per member.</p>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="weeklyPayoutAmount">Weekly High Score Payout</Label>
+                  <Label htmlFor="weeklyHighScorePrize">Weekly High Score Prize</Label>
                   <div className="relative">
                     <span className="absolute left-3 top-2.5 text-muted-foreground">$</span>
                     <Input 
-                      id="weeklyPayoutAmount" 
+                      id="weeklyHighScorePrize" 
                       type="number" 
                       className="pl-8 font-mono"
-                      {...register("weeklyPayoutAmount")} 
+                      {...register("weeklyHighScorePrize")} 
+                      data-testid="input-weekly-high-score-prize"
                     />
                   </div>
-                  <p className="text-xs text-muted-foreground">Amount paid out automatically each week (optional).</p>
+                  <p className="text-xs text-muted-foreground">Amount paid to highest scorer each week (optional).</p>
                 </div>
               </div>
 
@@ -144,6 +146,7 @@ export default function CreateLeague() {
                   placeholder="e.g. 1st Place: 60%, 2nd Place: 30%, 3rd Place: 10%"
                   className="min-h-[100px]"
                   {...register("payoutRules")} 
+                  data-testid="input-payout-rules"
                 />
               </div>
 
@@ -152,27 +155,27 @@ export default function CreateLeague() {
               <div className="space-y-4">
                 <div className="flex items-center justify-between gap-4">
                   <div className="space-y-0.5">
-                    <Label htmlFor="lowestScorerFeeEnabled">Lowest Scorer Fee</Label>
+                    <Label htmlFor="weeklyLowScoreFeeEnabled">Lowest Scorer Fee (LPS)</Label>
                     <p className="text-xs text-muted-foreground">Charge the lowest scorer each week a penalty fee.</p>
                   </div>
                   <Switch 
-                    id="lowestScorerFeeEnabled"
-                    checked={lowestScorerFeeEnabled}
-                    onCheckedChange={(checked) => setValue("lowestScorerFeeEnabled", checked)}
+                    id="weeklyLowScoreFeeEnabled"
+                    checked={weeklyLowScoreFeeEnabled}
+                    onCheckedChange={(checked) => setValue("weeklyLowScoreFeeEnabled", checked)}
                     data-testid="switch-lowest-scorer-fee"
                   />
                 </div>
 
-                {lowestScorerFeeEnabled && (
+                {weeklyLowScoreFeeEnabled && (
                   <div className="space-y-2">
-                    <Label htmlFor="lowestScorerFee">Weekly Penalty Amount</Label>
+                    <Label htmlFor="weeklyLowScoreFee">Weekly LPS Penalty Amount</Label>
                     <div className="relative">
                       <span className="absolute left-3 top-2.5 text-muted-foreground">$</span>
                       <Input 
-                        id="lowestScorerFee" 
+                        id="weeklyLowScoreFee" 
                         type="number" 
                         className="pl-8 font-mono"
-                        {...register("lowestScorerFee")} 
+                        {...register("weeklyLowScoreFee")} 
                         data-testid="input-lowest-scorer-fee"
                       />
                     </div>
