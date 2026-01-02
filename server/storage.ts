@@ -25,7 +25,7 @@ export interface IStorage {
   getLeagueMember(leagueId: number, userId: string): Promise<LeagueMember | undefined>;
   updateMemberStatus(id: number, status: string): Promise<void>;
 
-  createPayment(payment: InsertPayment & { userId: string; status: string }): Promise<Payment>;
+  createPayment(payment: InsertPayment & { userId: string; status: string; stripePaymentIntentId?: string | null }): Promise<Payment>;
   createPayout(payout: InsertPayout & { status: string }): Promise<Payout>;
   getLeagueTransactions(leagueId: number): Promise<{ payments: Payment[], payouts: Payout[] }>;
   
@@ -97,7 +97,7 @@ export class DatabaseStorage implements IStorage {
     await db.update(leagueMembers).set({ paidStatus: status }).where(eq(leagueMembers.id, id));
   }
 
-  async createPayment(payment: InsertPayment & { userId: string; status: string }): Promise<Payment> {
+  async createPayment(payment: InsertPayment & { userId: string; status: string; stripePaymentIntentId?: string | null }): Promise<Payment> {
     const [newPayment] = await db.insert(payments).values({
       leagueId: payment.leagueId,
       userId: payment.userId,

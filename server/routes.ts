@@ -35,7 +35,7 @@ export async function registerRoutes(
       const league = await storage.createLeague({
         ...input,
         commissionerId: userId,
-        settings: input.settings || { weeklyPayoutAmount: 0, seasonDues: 0, payoutRules: "" }
+        settings: input.settings || { weeklyPayoutAmount: 0, seasonDues: 0, payoutRules: "", lowestScorerFee: 0, lowestScorerFeeEnabled: false }
       });
 
       // Add creator as commissioner member
