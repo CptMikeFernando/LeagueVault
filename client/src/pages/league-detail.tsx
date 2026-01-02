@@ -206,7 +206,7 @@ export default function LeagueDetail() {
           </Card>
 
           {/* Row: Message Board + League Info */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-end">
             <div className="lg:col-span-2">
               <MessageBoard leagueId={league.id} />
             </div>
@@ -256,7 +256,7 @@ export default function LeagueDetail() {
           </div>
 
           {/* Row: Sports Scores + Budget Forecast */}
-          <div className={`grid grid-cols-1 ${isCommissioner ? 'lg:grid-cols-3' : ''} gap-6 items-start`}>
+          <div className={`grid grid-cols-1 ${isCommissioner ? 'lg:grid-cols-3' : ''} gap-6 items-end`}>
             <div className={isCommissioner ? 'lg:col-span-2' : ''}>
               <SportsScoresWidget />
             </div>
