@@ -1774,7 +1774,7 @@ function MessageBoard({ leagueId }: { leagueId: number }) {
   const sortedMessages = messages ? [...messages].reverse() : [];
 
   return (
-    <Card className="flex-1 flex flex-col">
+    <Card>
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2">
           <MessageSquare className="w-5 h-5" />
@@ -1782,8 +1782,8 @@ function MessageBoard({ leagueId }: { leagueId: number }) {
         </CardTitle>
         <CardDescription>Chat with your league members</CardDescription>
       </CardHeader>
-      <CardContent className="flex-1 flex flex-col space-y-4">
-        <ScrollArea className="flex-1 min-h-[250px]">
+      <CardContent className="space-y-4">
+        <ScrollArea className="h-[300px]">
           {isLoading ? (
             <div className="space-y-3">
               {[1, 2, 3].map(i => (
