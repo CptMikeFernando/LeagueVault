@@ -1503,7 +1503,7 @@ export async function registerRoutes(
               ? `https://${process.env.REPLIT_DEV_DOMAIN}` 
               : 'https://your-app.replit.app';
             const leagueUrl = `${baseUrl}/leagues/${leagueId}`;
-            const message = `Hey, nerd. You still haven't paid your dues for ${league.name}. Pay up or shut up.\n\nJoin or log in here: ${leagueUrl}`;
+            const message = `You've been invited to join ${league.name} on LeagueVault! Click here to join and pay your dues: ${leagueUrl}`;
             
             console.log('Sending invite SMS to:', contactValue);
             console.log('Message:', message);
