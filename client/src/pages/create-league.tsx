@@ -11,14 +11,16 @@ import { z } from "zod";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
 
-// Extend the schema to handle the jsonb settings field flatly in the form
 const formSchema = z.object({
   name: z.string().min(3, "Name must be at least 3 characters"),
   seasonYear: z.coerce.number().min(2020),
   seasonDues: z.coerce.number().min(0),
   weeklyPayoutAmount: z.coerce.number().min(0),
   payoutRules: z.string().optional(),
+  lowestScorerFeeEnabled: z.boolean().optional(),
+  lowestScorerFee: z.coerce.number().min(0).optional(),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -28,14 +30,18 @@ export default function CreateLeague() {
   const [, setLocation] = useLocation();
   const createLeague = useCreateLeague();
 
-  const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, formState: { errors }, watch, setValue } = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       seasonYear: new Date().getFullYear(),
       seasonDues: 50,
       weeklyPayoutAmount: 0,
+      lowestScorerFeeEnabled: false,
+      lowestScorerFee: 5,
     }
   });
+
+  const lowestScorerFeeEnabled = watch("lowestScorerFeeEnabled");
 
   const onSubmit = (data: FormData) => {
     if (!user) return;
@@ -43,12 +49,14 @@ export default function CreateLeague() {
     createLeague.mutate({
       name: data.name,
       seasonYear: data.seasonYear,
-      commissionerId: user.id, // Will be validated by backend auth context usually, but schema requires it
+      commissionerId: user.id,
       platform: "custom",
       settings: {
         seasonDues: data.seasonDues,
         weeklyPayoutAmount: data.weeklyPayoutAmount,
         payoutRules: data.payoutRules || "",
+        lowestScorerFeeEnabled: data.lowestScorerFeeEnabled || false,
+        lowestScorerFee: data.lowestScorerFee || 0,
       },
     }, {
       onSuccess: () => setLocation("/")
@@ -137,6 +145,40 @@ export default function CreateLeague() {
                   className="min-h-[100px]"
                   {...register("payoutRules")} 
                 />
+              </div>
+
+              <Separator />
+
+              <div className="space-y-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="lowestScorerFeeEnabled">Lowest Scorer Fee</Label>
+                    <p className="text-xs text-muted-foreground">Charge the lowest scorer each week a penalty fee.</p>
+                  </div>
+                  <Switch 
+                    id="lowestScorerFeeEnabled"
+                    checked={lowestScorerFeeEnabled}
+                    onCheckedChange={(checked) => setValue("lowestScorerFeeEnabled", checked)}
+                    data-testid="switch-lowest-scorer-fee"
+                  />
+                </div>
+
+                {lowestScorerFeeEnabled && (
+                  <div className="space-y-2">
+                    <Label htmlFor="lowestScorerFee">Weekly Penalty Amount</Label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2.5 text-muted-foreground">$</span>
+                      <Input 
+                        id="lowestScorerFee" 
+                        type="number" 
+                        className="pl-8 font-mono"
+                        {...register("lowestScorerFee")} 
+                        data-testid="input-lowest-scorer-fee"
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">Amount the lowest scorer must pay each week.</p>
+                  </div>
+                )}
               </div>
             </div>
 

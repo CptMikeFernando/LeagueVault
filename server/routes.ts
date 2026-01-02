@@ -230,6 +230,64 @@ export async function registerRoutes(
     }
   });
 
+  // Finalize week and process lowest scorer penalty
+  app.post("/api/leagues/:id/finalize-week", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const leagueId = Number(req.params.id);
+      const { week } = req.body;
+      
+      // Authorization check (only commissioner)
+      const league = await storage.getLeague(leagueId);
+      if (!league) {
+        return res.status(404).json({ message: "League not found" });
+      }
+      
+      if (league.commissionerId !== userId) {
+        return res.status(403).json({ message: "Only commissioner can finalize weeks" });
+      }
+
+      const scores = await storage.getWeeklyScores(leagueId, Number(week));
+      if (scores.length === 0) {
+        return res.status(400).json({ message: "No scores recorded for this week" });
+      }
+
+      const results: any = { week: Number(week), processed: [] };
+
+      // Process highest scorer payout if enabled
+      if (league.settings?.weeklyPayoutAmount && league.settings.weeklyPayoutAmount > 0) {
+        const highestScorer = scores[0];
+        const payout = await storage.createPayout({
+          leagueId,
+          userId: highestScorer.userId,
+          amount: String(league.settings.weeklyPayoutAmount),
+          reason: 'weekly_high_score',
+          week: Number(week),
+          status: 'approved'
+        });
+        results.processed.push({ type: 'payout', userId: highestScorer.userId, amount: league.settings.weeklyPayoutAmount });
+      }
+
+      // Process lowest scorer penalty if enabled
+      if (league.settings?.lowestScorerFeeEnabled && league.settings.lowestScorerFee > 0) {
+        const lowestScorer = scores[scores.length - 1];
+        const payment = await storage.createPayment({
+          leagueId,
+          userId: lowestScorer.userId,
+          amount: String(league.settings.lowestScorerFee),
+          status: 'pending',
+          stripePaymentIntentId: null
+        });
+        results.processed.push({ type: 'penalty', userId: lowestScorer.userId, amount: league.settings.lowestScorerFee });
+      }
+      
+      res.json({ success: true, results });
+    } catch (err) {
+      console.error("Error finalizing week:", err);
+      res.status(500).json({ message: "Failed to finalize week" });
+    }
+  });
+
   // Get weekly scores for a league
   app.get("/api/leagues/:id/scores/:week", isAuthenticated, async (req, res) => {
     try {
@@ -238,8 +296,20 @@ export async function registerRoutes(
       
       const scores = await storage.getWeeklyScores(leagueId, week);
       const highestScorer = scores.length > 0 ? scores[0] : null;
+      const lowestScorer = scores.length > 0 ? scores[scores.length - 1] : null;
+
+      // Get league settings to check if lowest scorer fee is enabled
+      const league = await storage.getLeague(leagueId);
+      const lowestScorerFeeEnabled = league?.settings?.lowestScorerFeeEnabled || false;
+      const lowestScorerFee = league?.settings?.lowestScorerFee || 0;
       
-      res.json({ scores, highestScorer });
+      res.json({ 
+        scores, 
+        highestScorer, 
+        lowestScorer,
+        lowestScorerFeeEnabled,
+        lowestScorerFee
+      });
     } catch (err) {
       console.error("Error fetching scores:", err);
       res.status(500).json({ message: "Failed to fetch scores" });

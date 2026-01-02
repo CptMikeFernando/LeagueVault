@@ -20,7 +20,9 @@ export const leagues = pgTable("leagues", {
     weeklyPayoutAmount: number;
     seasonDues: number;
     payoutRules: string;
-  }>().default({ weeklyPayoutAmount: 0, seasonDues: 0, payoutRules: "" }),
+    lowestScorerFee: number;
+    lowestScorerFeeEnabled: boolean;
+  }>().default({ weeklyPayoutAmount: 0, seasonDues: 0, payoutRules: "", lowestScorerFee: 0, lowestScorerFeeEnabled: false }),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

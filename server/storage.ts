@@ -32,6 +32,7 @@ export interface IStorage {
   addWeeklyScore(score: InsertWeeklyScore): Promise<WeeklyScore>;
   getWeeklyScores(leagueId: number, week: number): Promise<WeeklyScore[]>;
   getHighestScorerForWeek(leagueId: number, week: number): Promise<WeeklyScore | undefined>;
+  getLowestScorerForWeek(leagueId: number, week: number): Promise<WeeklyScore | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -144,6 +145,11 @@ export class DatabaseStorage implements IStorage {
   async getHighestScorerForWeek(leagueId: number, week: number): Promise<WeeklyScore | undefined> {
     const scores = await this.getWeeklyScores(leagueId, week);
     return scores.length > 0 ? scores[0] : undefined;
+  }
+
+  async getLowestScorerForWeek(leagueId: number, week: number): Promise<WeeklyScore | undefined> {
+    const scores = await this.getWeeklyScores(leagueId, week);
+    return scores.length > 0 ? scores[scores.length - 1] : undefined;
   }
 
   // Stripe-related storage methods
