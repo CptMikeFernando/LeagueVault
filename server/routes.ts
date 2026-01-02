@@ -1450,16 +1450,27 @@ export async function registerRoutes(
       // Send invite via SMS if phone
       if (contactType === 'phone') {
         const { sendSMS, isTwilioConfigured } = await import('./twilio');
-        if (await isTwilioConfigured()) {
+        const twilioReady = await isTwilioConfigured();
+        console.log('Twilio configured for invite:', twilioReady);
+        
+        if (twilioReady) {
           const baseUrl = process.env.REPLIT_DEV_DOMAIN 
             ? `https://${process.env.REPLIT_DEV_DOMAIN}` 
             : 'https://your-app.replit.app';
-          const message = `You've been invited to join "${league.name}" on LeagueVault! Sign up here: ${baseUrl}`;
+          const leagueUrl = `${baseUrl}/leagues/${leagueId}`;
+          const message = `Hey, nerd. You still haven't paid your dues for ${league.name}. Pay up or shut up.\n\nJoin or log in here: ${leagueUrl}`;
           
+          console.log('Sending invite SMS to:', contactValue);
           const smsResult = await sendSMS(contactValue, message);
+          console.log('SMS result:', smsResult);
+          
           if (smsResult.success) {
             await storage.updateInviteStatus(invite.id, 'sent');
+          } else {
+            console.error('Failed to send invite SMS:', smsResult.error);
           }
+        } else {
+          console.warn('Twilio not configured - invite SMS not sent');
         }
       }
 
