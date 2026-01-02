@@ -94,7 +94,8 @@ The `shared/` directory contains code used by both frontend and backend:
 - **Private League Support**: For private ESPN leagues, commissioners can provide espn_s2 and SWID cookies
 - **API Endpoints Used**:
   - `https://fantasy.espn.com/apis/v3/games/ffl/seasons/{SEASON}/segments/0/leagues/{LEAGUE_ID}?view=mTeam&view=mMatchupScore`
-- **Fallback**: If ESPN integration fails or isn't configured, mock scores are generated
+- **Fallback**: If ESPN integration fails or isn't configured, mock scores are generated with source marked as "mock"
+- **Error Reporting**: ESPN failures and unmapped members are surfaced to commissioners via toast notifications after sync
 
 ### Pending Integrations
 - **Twilio SMS**: Configured and active. SMS notifications are sent for:
