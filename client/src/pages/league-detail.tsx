@@ -284,6 +284,7 @@ export default function LeagueDetail() {
                     <TableHead>Team Name</TableHead>
                     <TableHead>Role</TableHead>
                     <TableHead>Status</TableHead>
+                    {isCommissioner && <TableHead>Invite</TableHead>}
                     {isCommissioner && <TableHead>Actions</TableHead>}
                   </TableRow>
                 </TableHeader>
@@ -303,6 +304,11 @@ export default function LeagueDetail() {
                           {member.paidStatus}
                         </Badge>
                       </TableCell>
+                      {isCommissioner && (
+                        <TableCell>
+                          <ResendInviteButton leagueId={league.id} member={member} />
+                        </TableCell>
+                      )}
                       {isCommissioner && (
                         <TableCell>
                           <div className="flex items-center gap-2">
@@ -2110,6 +2116,45 @@ function EditLeagueNameDialog({ leagueId, currentName }: { leagueId: number; cur
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function ResendInviteButton({ leagueId, member }: { leagueId: number; member: any }) {
+  const { toast } = useToast();
+  
+  const resendInvite = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest('POST', `/api/leagues/${leagueId}/members/${member.id}/resend-invite`);
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || 'Failed to resend invite');
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      toast({ title: "Invite sent!", description: data.message || "Invite has been resent." });
+    },
+    onError: (err: any) => {
+      toast({ title: "Failed", description: err.message, variant: "destructive" });
+    }
+  });
+
+  const hasContact = member.phoneNumber || member.email;
+  
+  if (!hasContact) {
+    return <span className="text-sm text-muted-foreground">No contact</span>;
+  }
+
+  return (
+    <Button
+      size="sm"
+      variant="outline"
+      onClick={() => resendInvite.mutate()}
+      disabled={resendInvite.isPending}
+      data-testid={`button-resend-invite-${member.id}`}
+    >
+      {resendInvite.isPending ? 'Sending...' : 'Resend'}
+    </Button>
   );
 }
 

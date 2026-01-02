@@ -1649,6 +1649,54 @@ export async function registerRoutes(
     }
   });
 
+  // === RESEND INVITE TO MEMBER ===
+  app.post("/api/leagues/:id/members/:memberId/resend-invite", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const leagueId = Number(req.params.id);
+      const memberId = Number(req.params.memberId);
+
+      const league = await storage.getLeague(leagueId);
+      if (!league) {
+        return res.status(404).json({ message: "League not found" });
+      }
+
+      if (league.commissionerId !== userId) {
+        return res.status(403).json({ message: "Only commissioners can resend invites" });
+      }
+
+      const member = await storage.getLeagueMemberById(memberId);
+      if (!member || member.leagueId !== leagueId) {
+        return res.status(404).json({ message: "Member not found in this league" });
+      }
+
+      const paymentUrl = `${process.env.REPLIT_DEV_DOMAIN ? 'https://' + process.env.REPLIT_DEV_DOMAIN : 'http://localhost:5000'}/pay/${leagueId}`;
+      const inviteMessage = `You've been invited to pay your dues for ${league.name} on LeagueVault! Click here to pay your dues now.\n\n${paymentUrl}`;
+
+      // Try SMS first, then email
+      if (member.phoneNumber) {
+        try {
+          const result = await sendSMS(member.phoneNumber, inviteMessage);
+          if (result.success) {
+            return res.json({ success: true, method: 'sms', message: `Invite sent via SMS to ${member.phoneNumber}` });
+          }
+        } catch (smsErr) {
+          console.error("SMS failed, trying email:", smsErr);
+        }
+      }
+
+      if (member.email) {
+        // Email sending not yet configured
+        return res.json({ success: true, method: 'email', message: `Email invite would be sent to ${member.email} (email not configured)` });
+      }
+
+      return res.status(400).json({ message: "Member has no contact information" });
+    } catch (err) {
+      console.error("Error resending invite:", err);
+      res.status(500).json({ message: "Failed to resend invite" });
+    }
+  });
+
   // === UPDATE LEAGUE NAME ===
   const updateLeagueNameSchema = z.object({
     name: z.string().min(1, "League name is required").max(100, "League name too long")
