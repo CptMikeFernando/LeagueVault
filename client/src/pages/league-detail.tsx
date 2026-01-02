@@ -211,7 +211,7 @@ export default function LeagueDetail() {
             <div className="lg:col-span-2">
               <MessageBoard leagueId={league.id} />
             </div>
-            <Card className="h-[340px]">
+            <Card className="h-[400px]">
               <CardHeader>
                 <CardTitle>League Info</CardTitle>
               </CardHeader>
@@ -2110,7 +2110,7 @@ function MessageBoard({ leagueId }: { leagueId: number }) {
 
 
   return (
-    <Card className="h-[340px] flex flex-col">
+    <Card className="h-[400px] flex flex-col">
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2">
           <MessageSquare className="w-5 h-5" />
