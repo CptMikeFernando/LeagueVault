@@ -34,7 +34,8 @@ export async function fetchEspnScores(
   cookies?: { espnS2?: string; swid?: string }
 ): Promise<{ success: boolean; data?: EspnScoreData; error?: string }> {
   try {
-    const baseUrl = `https://fantasy.espn.com/apis/v3/games/ffl/seasons/${seasonId}/segments/0/leagues/${leagueId}`;
+    // ESPN changed their API endpoint in April 2024
+    const baseUrl = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${seasonId}/segments/0/leagues/${leagueId}`;
     const url = `${baseUrl}?view=mTeam&view=mMatchupScore&scoringPeriodId=${week}`;
     
     const headers: Record<string, string> = {
@@ -109,7 +110,8 @@ export async function fetchEspnTeams(
   cookies?: { espnS2?: string; swid?: string }
 ): Promise<{ success: boolean; teams?: EspnTeam[]; error?: string }> {
   try {
-    const baseUrl = `https://fantasy.espn.com/apis/v3/games/ffl/seasons/${seasonId}/segments/0/leagues/${leagueId}`;
+    // ESPN changed their API endpoint in April 2024
+    const baseUrl = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${seasonId}/segments/0/leagues/${leagueId}`;
     const url = `${baseUrl}?view=mTeam`;
     
     const headers: Record<string, string> = {
@@ -178,7 +180,8 @@ export async function fetchEspnLeagueInfo(
   cookies?: { espnS2?: string; swid?: string }
 ): Promise<{ success: boolean; data?: EspnLeagueInfo; error?: string }> {
   try {
-    const baseUrl = `https://fantasy.espn.com/apis/v3/games/ffl/seasons/${seasonId}/segments/0/leagues/${leagueId}`;
+    // ESPN changed their API endpoint in April 2024
+    const baseUrl = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${seasonId}/segments/0/leagues/${leagueId}`;
     const url = `${baseUrl}?view=mSettings&view=mTeam`;
     
     const headers: Record<string, string> = {
