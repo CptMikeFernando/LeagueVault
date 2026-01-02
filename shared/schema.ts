@@ -125,7 +125,7 @@ export const weeklyScoresRelations = relations(weeklyScores, ({ one }) => ({
 // === ZOD SCHEMAS ===
 export const insertLeagueSchema = createInsertSchema(leagues).omit({ id: true, createdAt: true, totalDues: true });
 export const insertLeagueMemberSchema = createInsertSchema(leagueMembers).omit({ id: true, joinedAt: true });
-export const insertPaymentSchema = createInsertSchema(payments).omit({ id: true, createdAt: true, status: true });
+export const insertPaymentSchema = createInsertSchema(payments).omit({ id: true, createdAt: true, status: true, stripePaymentIntentId: true });
 export const insertPayoutSchema = createInsertSchema(payouts).omit({ id: true, createdAt: true, status: true });
 export const insertWeeklyScoreSchema = createInsertSchema(weeklyScores).omit({ id: true, createdAt: true });
 
