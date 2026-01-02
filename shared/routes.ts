@@ -107,6 +107,15 @@ export const api = {
         403: errorSchemas.unauthorized,
         404: errorSchemas.notFound,
       }
+    },
+    delete: {
+      method: 'DELETE' as const,
+      path: '/api/leagues/:id',
+      responses: {
+        200: z.object({ success: z.boolean() }),
+        403: errorSchemas.unauthorized,
+        404: errorSchemas.notFound,
+      }
     }
   },
   payments: {

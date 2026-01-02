@@ -184,6 +184,30 @@ export async function registerRoutes(
     }
   });
 
+  // Delete league (commissioner only)
+  app.delete(api.leagues.delete.path, isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const leagueId = Number(req.params.id);
+      
+      const league = await storage.getLeague(leagueId);
+      if (!league) {
+        return res.status(404).json({ message: "League not found" });
+      }
+      
+      if (league.commissionerId !== userId) {
+        return res.status(403).json({ message: "Only commissioner can delete a league" });
+      }
+
+      await storage.deleteLeague(leagueId);
+      
+      res.json({ success: true });
+    } catch (err) {
+      console.error("Error deleting league:", err);
+      res.status(500).json({ message: "Failed to delete league" });
+    }
+  });
+
   // Sync scores from platform (ESPN API or mock)
   app.post(api.leagues.syncScores.path, isAuthenticated, async (req: any, res) => {
     try {

@@ -3,7 +3,7 @@ import { usePayments, useCreatePayment } from "@/hooks/use-payments";
 import { useCreatePayout } from "@/hooks/use-payouts";
 import { useUpdateScore } from "@/hooks/use-scores";
 import { useAuth } from "@/hooks/use-auth";
-import { useParams, Link } from "wouter";
+import { useParams, Link, useLocation } from "wouter";
 import { 
   Tabs, TabsContent, TabsList, TabsTrigger 
 } from "@/components/ui/tabs";
@@ -41,8 +41,10 @@ import {
   Phone,
   MessageSquare,
   Link2,
-  Calculator
+  Calculator,
+  Trash2
 } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useState } from "react";
 import { format } from "date-fns";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -393,6 +395,7 @@ export default function LeagueDetail() {
               <LeagueSettingsForm league={league} />
               <EspnSettingsForm league={league} />
               <EspnTeamMappingForm league={league} />
+              <DeleteLeagueSection league={league} />
             </div>
           </TabsContent>
         )}
@@ -1609,5 +1612,107 @@ function SendRemindersForm({ league }: { league: any }) {
         SMS notifications require Twilio to be configured.
       </p>
     </div>
+  );
+}
+
+function DeleteLeagueSection({ league }: { league: any }) {
+  const { toast } = useToast();
+  const [, navigate] = useLocation();
+  const [confirmName, setConfirmName] = useState("");
+  const [isOpen, setIsOpen] = useState(false);
+
+  const deleteLeague = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest('DELETE', `/api/leagues/${league.id}`);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/leagues'] });
+      toast({
+        title: "League Deleted",
+        description: "The league has been permanently deleted.",
+      });
+      navigate('/dashboard');
+    },
+    onError: () => {
+      toast({
+        title: "Delete Failed",
+        description: "Could not delete the league. Please try again.",
+        variant: "destructive",
+      });
+    }
+  });
+
+  const handleDelete = () => {
+    if (confirmName === league.name) {
+      deleteLeague.mutate();
+    }
+  };
+
+  const isNameMatch = confirmName === league.name;
+
+  return (
+    <Card className="border-destructive/50">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-destructive">
+          <Trash2 className="w-5 h-5" />
+          Danger Zone
+        </CardTitle>
+        <CardDescription>
+          Permanently delete this league and all its data. This action cannot be undone.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <AlertDialog open={isOpen} onOpenChange={setIsOpen}>
+          <AlertDialogTrigger asChild>
+            <Button variant="destructive" data-testid="button-delete-league">
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete League
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+              <AlertDialogDescription className="space-y-3">
+                <p>
+                  This will permanently delete <strong>{league.name}</strong> and all associated data including:
+                </p>
+                <ul className="list-disc list-inside text-sm space-y-1">
+                  <li>All member records and wallet balances</li>
+                  <li>All payment and payout history</li>
+                  <li>All weekly scores and transactions</li>
+                </ul>
+                <p className="font-medium text-destructive">
+                  This action cannot be undone.
+                </p>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="space-y-2 py-4">
+              <Label htmlFor="confirmName">
+                Type <strong>{league.name}</strong> to confirm:
+              </Label>
+              <Input
+                id="confirmName"
+                value={confirmName}
+                onChange={(e) => setConfirmName(e.target.value)}
+                placeholder="Enter league name"
+                data-testid="input-confirm-league-name"
+              />
+            </div>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setConfirmName("")}>Cancel</AlertDialogCancel>
+              <Button
+                variant="destructive"
+                onClick={handleDelete}
+                disabled={!isNameMatch || deleteLeague.isPending}
+                data-testid="button-confirm-delete"
+              >
+                {deleteLeague.isPending ? "Deleting..." : "Delete Forever"}
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </CardContent>
+    </Card>
   );
 }

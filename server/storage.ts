@@ -16,7 +16,7 @@ import {
   type PaymentReminder, type InsertPaymentReminder,
   type LeagueWithMembers
 } from "@shared/schema";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import { authStorage } from "./replit_integrations/auth/storage";
 
 export interface IStorage {
@@ -94,6 +94,9 @@ export interface IStorage {
 
   // League start date
   updateLeagueStartDate(leagueId: number, startDate: Date): Promise<void>;
+
+  // Delete league (commissioner only)
+  deleteLeague(leagueId: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -528,6 +531,64 @@ export class DatabaseStorage implements IStorage {
   // League start date
   async updateLeagueStartDate(leagueId: number, startDate: Date): Promise<void> {
     await db.update(leagues).set({ startDate })
+      .where(eq(leagues.id, leagueId));
+  }
+
+  async deleteLeague(leagueId: number): Promise<void> {
+    // Delete all related data in order (children first, then parent)
+    // This handles foreign key constraints properly
+    
+    // Get all wallets for this league
+    const leagueWallets = await db.select().from(memberWallets)
+      .where(eq(memberWallets.leagueId, leagueId));
+    const walletIds = leagueWallets.map(w => w.id);
+    
+    // Delete withdrawal requests first (references wallets)
+    if (walletIds.length > 0) {
+      await db.delete(withdrawalRequests)
+        .where(inArray(withdrawalRequests.walletId, walletIds));
+    }
+    
+    // Delete wallet transactions (references wallets)
+    if (walletIds.length > 0) {
+      await db.delete(walletTransactions)
+        .where(inArray(walletTransactions.walletId, walletIds));
+    }
+    
+    // Delete member wallets
+    await db.delete(memberWallets)
+      .where(eq(memberWallets.leagueId, leagueId));
+    
+    // Delete LPS payment requests
+    await db.delete(lpsPaymentRequests)
+      .where(eq(lpsPaymentRequests.leagueId, leagueId));
+    
+    // Delete payment reminders
+    await db.delete(paymentReminders)
+      .where(eq(paymentReminders.leagueId, leagueId));
+    
+    // Delete weekly scores
+    await db.delete(weeklyScores)
+      .where(eq(weeklyScores.leagueId, leagueId));
+    
+    // Delete payouts
+    await db.delete(payouts)
+      .where(eq(payouts.leagueId, leagueId));
+    
+    // Delete payments
+    await db.delete(payments)
+      .where(eq(payments.leagueId, leagueId));
+    
+    // Delete platform fees
+    await db.delete(platformFees)
+      .where(eq(platformFees.leagueId, leagueId));
+    
+    // Delete league members
+    await db.delete(leagueMembers)
+      .where(eq(leagueMembers.leagueId, leagueId));
+    
+    // Finally delete the league itself
+    await db.delete(leagues)
       .where(eq(leagues.id, leagueId));
   }
 }
