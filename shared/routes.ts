@@ -77,6 +77,36 @@ export const api = {
                 })
             })
         }
+    },
+    updateSettings: {
+      method: 'PATCH' as const,
+      path: '/api/leagues/:id/settings',
+      input: z.object({
+        entryFee: z.number().min(0).optional(),
+        weeklyHighScorePrize: z.number().min(0).optional(),
+        weeklyLowScoreFee: z.number().min(0).optional(),
+        weeklyLowScoreFeeEnabled: z.boolean().optional(),
+        payoutRules: z.string().optional(),
+      }),
+      responses: {
+        200: z.object({ success: z.boolean() }),
+        403: errorSchemas.unauthorized,
+        404: errorSchemas.notFound,
+      }
+    },
+    syncScores: {
+      method: 'POST' as const,
+      path: '/api/leagues/:id/sync-scores',
+      input: z.object({ week: z.number() }),
+      responses: {
+        200: z.object({
+          success: z.boolean(),
+          scoresUpdated: z.number(),
+          source: z.string(),
+        }),
+        403: errorSchemas.unauthorized,
+        404: errorSchemas.notFound,
+      }
     }
   },
   payments: {

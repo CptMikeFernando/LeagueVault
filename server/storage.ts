@@ -217,7 +217,8 @@ export class DatabaseStorage implements IStorage {
       leagueId: score.leagueId,
       userId: score.userId,
       week: score.week,
-      score: score.score
+      score: score.score,
+      source: score.source || 'manual'
     }).returning();
     return newScore;
   }

@@ -155,6 +155,96 @@ export async function registerRoutes(
     }
   });
 
+  // Update league settings (commissioner only)
+  app.patch(api.leagues.updateSettings.path, isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const leagueId = Number(req.params.id);
+      const settingsUpdate = req.body;
+      
+      const league = await storage.getLeague(leagueId);
+      if (!league) {
+        return res.status(404).json({ message: "League not found" });
+      }
+      
+      if (league.commissionerId !== userId) {
+        return res.status(403).json({ message: "Only commissioner can update settings" });
+      }
+
+      // Merge new settings with existing settings
+      const currentSettings = league.settings || {};
+      const newSettings = { ...currentSettings, ...settingsUpdate };
+      
+      await storage.updateLeagueSettings(leagueId, newSettings);
+      
+      res.json({ success: true });
+    } catch (err) {
+      console.error("Error updating settings:", err);
+      res.status(500).json({ message: "Failed to update settings" });
+    }
+  });
+
+  // Sync scores from platform (mock ESPN/Yahoo API)
+  app.post(api.leagues.syncScores.path, isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const leagueId = Number(req.params.id);
+      const { week } = req.body;
+      
+      const league = await storage.getLeague(leagueId);
+      if (!league) {
+        return res.status(404).json({ message: "League not found" });
+      }
+      
+      if (league.commissionerId !== userId) {
+        return res.status(403).json({ message: "Only commissioner can sync scores" });
+      }
+
+      // Simulate fetching scores from ESPN/Yahoo API
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Get all league members and generate mock scores
+      const members = league.members || [];
+      let scoresUpdated = 0;
+      
+      for (const member of members) {
+        // Generate a random score between 80 and 180
+        const mockScore = (80 + Math.random() * 100).toFixed(2);
+        
+        // Check if score already exists for this member/week
+        const existingScores = await storage.getWeeklyScores(leagueId, week);
+        const hasExisting = existingScores.some(s => s.userId === member.userId);
+        
+        if (!hasExisting) {
+          await storage.addWeeklyScore({
+            leagueId,
+            userId: member.userId,
+            week,
+            score: mockScore,
+            source: league.platform === 'custom' ? 'manual' : league.platform
+          });
+          scoresUpdated++;
+        }
+      }
+
+      // Update lastScoreSync timestamp
+      const currentSettings = league.settings || {};
+      await storage.updateLeagueSettings(leagueId, {
+        ...currentSettings,
+        lastScoreSync: new Date().toISOString()
+      });
+      
+      res.json({ 
+        success: true, 
+        scoresUpdated,
+        source: league.platform === 'custom' ? 'manual' : league.platform
+      });
+    } catch (err) {
+      console.error("Error syncing scores:", err);
+      res.status(500).json({ message: "Failed to sync scores" });
+    }
+  });
+
   // === PAYMENTS ===
   app.post(api.payments.create.path, isAuthenticated, async (req: any, res) => {
     try {
