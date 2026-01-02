@@ -116,12 +116,20 @@ export async function registerRoutes(
           return res.status(400).json({ message: "Could not parse ESPN league ID from URL. Expected format: https://fantasy.espn.com/football/league?leagueId=XXXXXX" });
         }
         const espnLeagueId = urlMatch[1];
-        const currentYear = new Date().getFullYear().toString();
+        // ESPN seasons run Aug-Feb, so Jan-July uses previous calendar year
+        const now = new Date();
+        const currentYear = now.getMonth() < 7 
+          ? (now.getFullYear() - 1).toString() 
+          : now.getFullYear().toString();
+        
+        console.log(`ESPN Import: League ID ${espnLeagueId}, Season ${currentYear}, Cookies provided: ${!!(espnS2 && swid)}`);
         
         // Fetch real league info from ESPN API
         const { fetchEspnLeagueInfo } = await import('./espn-api');
         const cookies = espnS2 && swid ? { espnS2, swid } : undefined;
         const result = await fetchEspnLeagueInfo(espnLeagueId, currentYear, cookies);
+        
+        console.log(`ESPN Import Result:`, result.success ? `Success - ${result.data?.teams?.length || 0} teams` : `Error - ${result.error}`);
         
         if (!result.success || !result.data) {
           return res.status(400).json({ 
