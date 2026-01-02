@@ -181,32 +181,46 @@ function ImportLeagueDialog() {
   const sync = useSyncPlatform();
   const [platform, setPlatform] = useState<'espn' | 'yahoo'>('espn');
   const [url, setUrl] = useState("");
+  const [isPrivate, setIsPrivate] = useState(false);
+  const [espnS2, setEspnS2] = useState("");
+  const [swid, setSwid] = useState("");
 
   const handleSync = (e: React.FormEvent) => {
     e.preventDefault();
     sync.mutate(
-      { platform, leagueUrl: url },
-      { onSuccess: () => setIsOpen(false) }
+      { 
+        platform, 
+        leagueUrl: url,
+        ...(isPrivate && espnS2 && { espnS2 }),
+        ...(isPrivate && swid && { swid })
+      },
+      { onSuccess: () => {
+        setIsOpen(false);
+        setUrl("");
+        setEspnS2("");
+        setSwid("");
+        setIsPrivate(false);
+      }}
     );
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button variant="secondary">Import League</Button>
+        <Button variant="secondary" data-testid="button-import-league">Import League</Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Import from Platform</DialogTitle>
           <DialogDescription>
-            Connect your ESPN or Yahoo league to auto-populate settings.
+            Connect your ESPN or Yahoo league to import your team data.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSync} className="space-y-4 py-4">
           <div className="space-y-2">
             <Label>Platform</Label>
             <Select value={platform} onValueChange={(v: any) => setPlatform(v)}>
-              <SelectTrigger>
+              <SelectTrigger data-testid="select-platform">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -222,15 +236,63 @@ function ImportLeagueDialog() {
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               required
+              data-testid="input-league-url"
             />
           </div>
+          
+          {platform === 'espn' && (
+            <>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="privateLeague"
+                  checked={isPrivate}
+                  onChange={(e) => setIsPrivate(e.target.checked)}
+                  className="rounded"
+                  data-testid="checkbox-private-league"
+                />
+                <Label htmlFor="privateLeague" className="text-sm cursor-pointer">
+                  This is a private ESPN league
+                </Label>
+              </div>
+              
+              {isPrivate && (
+                <div className="space-y-3 p-3 bg-muted/50 rounded-lg">
+                  <p className="text-xs text-muted-foreground">
+                    Private leagues require ESPN cookies. Find these in your browser's developer tools.
+                  </p>
+                  <div className="space-y-2">
+                    <Label htmlFor="espnS2" className="text-xs">espn_s2 Cookie</Label>
+                    <Input 
+                      id="espnS2"
+                      placeholder="Your espn_s2 cookie value"
+                      value={espnS2}
+                      onChange={(e) => setEspnS2(e.target.value)}
+                      data-testid="input-espn-s2"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="swid" className="text-xs">SWID Cookie</Label>
+                    <Input 
+                      id="swid"
+                      placeholder="Your SWID cookie value"
+                      value={swid}
+                      onChange={(e) => setSwid(e.target.value)}
+                      data-testid="input-swid"
+                    />
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+          
           <div className="bg-muted p-4 rounded-lg flex gap-3 text-sm text-muted-foreground">
             <AlertCircle className="w-5 h-5 shrink-0" />
-            <p>This will create a new league in LeagueVault using your public league settings.</p>
+            <p>This will create a new league with your team names imported from ESPN.</p>
           </div>
           <DialogFooter>
-            <Button type="submit" disabled={sync.isPending}>
-              {sync.isPending ? "Syncing..." : "Import League"}
+            <Button type="submit" disabled={sync.isPending} data-testid="button-submit-import">
+              {sync.isPending ? "Importing..." : "Import League"}
             </Button>
           </DialogFooter>
         </form>

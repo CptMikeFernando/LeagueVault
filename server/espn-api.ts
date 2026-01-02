@@ -150,3 +150,74 @@ export async function fetchEspnTeams(
     };
   }
 }
+
+export interface EspnLeagueInfo {
+  name: string;
+  seasonId: number;
+  teams: Array<{
+    id: number;
+    name: string;
+    abbrev: string;
+    ownerName?: string;
+  }>;
+}
+
+export async function fetchEspnLeagueInfo(
+  leagueId: string,
+  seasonId: string,
+  cookies?: { espnS2?: string; swid?: string }
+): Promise<{ success: boolean; data?: EspnLeagueInfo; error?: string }> {
+  try {
+    const baseUrl = `https://fantasy.espn.com/apis/v3/games/ffl/seasons/${seasonId}/segments/0/leagues/${leagueId}`;
+    const url = `${baseUrl}?view=mSettings&view=mTeam`;
+    
+    const headers: Record<string, string> = {
+      'Accept': 'application/json',
+    };
+    
+    if (cookies?.espnS2 && cookies?.swid) {
+      headers['Cookie'] = `espn_s2=${cookies.espnS2}; SWID=${cookies.swid}`;
+    }
+
+    const response = await fetch(url, { headers });
+    
+    if (!response.ok) {
+      if (response.status === 401) {
+        return { success: false, error: 'ESPN API authentication failed. This may be a private league - you\'ll need to provide cookies.' };
+      }
+      if (response.status === 404) {
+        return { success: false, error: 'ESPN league not found. Check your League ID.' };
+      }
+      return { success: false, error: `ESPN API error: ${response.status}` };
+    }
+
+    const data = await response.json();
+    
+    const leagueName = data.settings?.name || `ESPN League ${leagueId}`;
+    
+    const teams = (data.teams || []).map((team: any) => {
+      const teamName = team.name || (team.location && team.nickname ? `${team.location} ${team.nickname}`.trim() : `Team ${team.id}`);
+      return {
+        id: team.id,
+        name: teamName,
+        abbrev: team.abbrev || '',
+        ownerName: team.owners?.[0]?.displayName
+      };
+    });
+
+    return {
+      success: true,
+      data: {
+        name: leagueName,
+        seasonId: data.seasonId || parseInt(seasonId),
+        teams
+      }
+    };
+  } catch (error) {
+    console.error('ESPN API fetch error:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Failed to fetch ESPN league info' 
+    };
+  }
+}

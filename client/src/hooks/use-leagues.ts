@@ -96,7 +96,7 @@ export function useSyncPlatform() {
   const { toast } = useToast();
   
   return useMutation({
-    mutationFn: async (data: { platform: 'espn' | 'yahoo', leagueUrl: string }) => {
+    mutationFn: async (data: { platform: 'espn' | 'yahoo', leagueUrl: string, espnS2?: string, swid?: string }) => {
       const res = await fetch(api.leagues.syncPlatform.path, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -104,14 +104,20 @@ export function useSyncPlatform() {
         credentials: "include",
       });
       
-      if (!res.ok) throw new Error("Failed to sync platform");
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.message || "Failed to sync platform");
+      }
       return api.leagues.syncPlatform.responses[200].parse(await res.json());
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: [api.leagues.list.path] });
+      const teamsImported = (data as any).data?.teamsImported;
       toast({
         title: "League Imported",
-        description: "Your league has been created from platform data.",
+        description: teamsImported 
+          ? `Your league has been created with ${teamsImported} teams imported.`
+          : "Your league has been created from platform data.",
       });
     },
     onError: (error: Error) => {

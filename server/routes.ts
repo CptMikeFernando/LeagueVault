@@ -103,23 +103,104 @@ export async function registerRoutes(
     }
   });
 
-  // === INTEGRATIONS (Mock ESPN/Yahoo) ===
+  // === INTEGRATIONS (ESPN/Yahoo) ===
   app.post(api.leagues.syncPlatform.path, isAuthenticated, async (req: any, res) => {
     try {
-      const { platform, leagueUrl } = req.body;
+      const { platform, leagueUrl, espnS2, swid } = req.body;
       const userId = req.user.claims.sub;
       
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      if (platform === 'espn') {
+        // Parse league ID from ESPN URL
+        const urlMatch = leagueUrl.match(/leagueId=(\d+)/);
+        if (!urlMatch) {
+          return res.status(400).json({ message: "Could not parse ESPN league ID from URL. Expected format: https://fantasy.espn.com/football/league?leagueId=XXXXXX" });
+        }
+        const espnLeagueId = urlMatch[1];
+        const currentYear = new Date().getFullYear().toString();
+        
+        // Fetch real league info from ESPN API
+        const { fetchEspnLeagueInfo } = await import('./espn-api');
+        const cookies = espnS2 && swid ? { espnS2, swid } : undefined;
+        const result = await fetchEspnLeagueInfo(espnLeagueId, currentYear, cookies);
+        
+        if (!result.success || !result.data) {
+          return res.status(400).json({ 
+            message: result.error || "Failed to fetch ESPN league data. If this is a private league, you may need to provide ESPN cookies." 
+          });
+        }
+        
+        const espnData = result.data;
+        
+        // Use the actual season from ESPN response
+        const actualSeasonId = espnData.seasonId || parseInt(currentYear);
+        
+        // Create the league with real ESPN data
+        const league = await storage.createLeague({
+          name: espnData.name,
+          commissionerId: userId,
+          platform: platform,
+          externalLeagueId: espnLeagueId,
+          seasonYear: actualSeasonId,
+          totalDues: "0",
+          settings: {
+            weeklyPayoutAmount: 0,
+            seasonDues: 100,
+            payoutRules: "Standard payout rules",
+            lowestScorerFee: 0,
+            lowestScorerFeeEnabled: false,
+            espnLeagueId: espnLeagueId,
+            espnSeasonId: actualSeasonId.toString(),
+            espnPrivateLeague: !!(espnS2 && swid),
+            ...(espnS2 && { espnS2 }),
+            ...(swid && { espnSwid: swid })
+          }
+        });
+
+        // Add the commissioner as a member (they can map to their ESPN team later)
+        await storage.addLeagueMember({
+          leagueId: league.id,
+          userId,
+          role: 'commissioner',
+          teamName: 'Commissioner',
+          paidStatus: 'unpaid'
+        });
+        
+        // Create placeholder members for each ESPN team (to be mapped to real users later)
+        // These use placeholder user IDs that commissioners can update through team mapping
+        for (const team of espnData.teams) {
+          try {
+            await storage.addLeagueMember({
+              leagueId: league.id,
+              userId: `espn-team-${league.id}-${team.id}`,
+              role: 'member',
+              teamName: team.name,
+              externalTeamId: team.id.toString(),
+              paidStatus: 'unpaid'
+            });
+          } catch (err) {
+            // Skip if there's a constraint violation (shouldn't happen with unique IDs)
+            console.warn(`Could not add placeholder for team ${team.id}:`, err);
+          }
+        }
+
+        return res.json({
+          success: true,
+          data: {
+            name: espnData.name,
+            seasonYear: espnData.seasonId,
+            externalId: espnLeagueId,
+            teamsImported: espnData.teams.length
+          }
+        });
+      }
       
-      // Mock data simulating ESPN/Yahoo response
+      // Fallback for other platforms (mock data)
       const mockData = {
         name: `${platform.toUpperCase()} Fantasy League 2025`,
         seasonYear: 2025,
         externalId: `mock-${platform}-${Date.now()}`
       };
 
-      // Actually create the league in the database
       const league = await storage.createLeague({
         name: mockData.name,
         commissionerId: userId,
@@ -136,7 +217,6 @@ export async function registerRoutes(
         }
       });
 
-      // Add the user as commissioner member
       await storage.addLeagueMember({
         leagueId: league.id,
         userId,
