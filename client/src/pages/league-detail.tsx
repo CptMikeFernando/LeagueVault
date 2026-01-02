@@ -425,7 +425,7 @@ function PayoutCalculatorCard({ league }: { league: any }) {
   const isBalanced = balance >= 0;
   
   return (
-    <Card data-testid="card-payout-calculator">
+    <Card className="h-[450px]" data-testid="card-payout-calculator">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Calculator className="w-5 h-5" />
@@ -2262,7 +2262,7 @@ function SportsScoresWidget() {
   };
 
   return (
-    <Card>
+    <Card className="h-[450px] flex flex-col">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <CardTitle className="flex items-center gap-2 text-base">
@@ -2292,8 +2292,8 @@ function SportsScoresWidget() {
           <CardDescription>Week {data.week} - {data.season} Season</CardDescription>
         )}
       </CardHeader>
-      <CardContent>
-        <ScrollArea className="h-[150px]">
+      <CardContent className="flex-1 overflow-hidden">
+        <ScrollArea className="h-full">
           {isLoading ? (
             <div className="space-y-2">
               {[1, 2, 3].map(i => (
