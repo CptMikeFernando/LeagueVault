@@ -305,9 +305,7 @@ export default function LeagueDetail() {
                       </TableCell>
                       {isCommissioner && (
                         <TableCell>
-                          {member.paidStatus !== 'paid' && (
-                            <SendReminderButton leagueId={league.id} memberId={member.id} hasPhone={!!member.phoneNumber} />
-                          )}
+                          <SendReminderButton leagueId={league.id} memberId={member.id} hasPhone={!!member.phoneNumber} paidStatus={member.paidStatus} />
                         </TableCell>
                       )}
                     </TableRow>
@@ -1923,7 +1921,7 @@ function InviteMemberDialog({ leagueId }: { leagueId: number }) {
   );
 }
 
-function SendReminderButton({ leagueId, memberId, hasPhone }: { leagueId: number; memberId: number; hasPhone: boolean }) {
+function SendReminderButton({ leagueId, memberId, hasPhone, paidStatus }: { leagueId: number; memberId: number; hasPhone: boolean; paidStatus: string }) {
   const { toast } = useToast();
 
   const sendReminder = useMutation({
@@ -1942,6 +1940,10 @@ function SendReminderButton({ leagueId, memberId, hasPhone }: { leagueId: number
       toast({ title: "Failed", description: err.message, variant: "destructive" });
     }
   });
+
+  if (paidStatus === 'paid') {
+    return <span className="text-sm text-muted-foreground">Paid</span>;
+  }
 
   if (!hasPhone) {
     return (
