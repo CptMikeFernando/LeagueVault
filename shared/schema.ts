@@ -59,6 +59,7 @@ export const leagueMembers = pgTable("league_members", {
   ownerName: text("owner_name"), // Display name for the member
   externalTeamId: text("external_team_id"), // ESPN/Yahoo team ID for score syncing
   phoneNumber: text("phone_number"), // For SMS payment reminders
+  email: text("email"), // For email reminders/invites
   paidStatus: text("paid_status").notNull().default("unpaid"), // 'paid', 'unpaid', 'partial'
   joinedAt: timestamp("joined_at").defaultNow(),
 });

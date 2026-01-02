@@ -1482,7 +1482,7 @@ export async function registerRoutes(
         ownerName: ownerName || null
       });
 
-      // Create a placeholder league member immediately with phone number
+      // Create a placeholder league member immediately with contact info
       const placeholderUserId = `invite_${invite.id}`;
       await storage.addLeagueMember({
         leagueId,
@@ -1491,11 +1491,14 @@ export async function registerRoutes(
         teamName: teamName || 'Pending Team',
         ownerName: ownerName || 'Pending Member',
         phoneNumber: contactType === 'phone' ? contactValue : null,
+        email: contactType === 'email' ? contactValue : null,
         paidStatus: 'unpaid'
       });
 
-      // Send invite via SMS if phone
-      console.log('=== INVITE SMS DEBUG START ===');
+      let inviteSent = false;
+      let inviteMethod = '';
+      
+      console.log('=== INVITE DEBUG START ===');
       console.log('Contact type:', contactType);
       console.log('Contact value:', contactValue);
       
@@ -1524,6 +1527,8 @@ export async function registerRoutes(
             
             if (smsResult.success) {
               await storage.updateInviteStatus(invite.id, 'sent');
+              inviteSent = true;
+              inviteMethod = 'sms';
               console.log('Invite status updated to sent');
             } else {
               console.error('Failed to send invite SMS:', smsResult.error);
@@ -1534,10 +1539,19 @@ export async function registerRoutes(
         } catch (smsError: any) {
           console.error('SMS sending error:', smsError.message, smsError.stack);
         }
+      } else if (contactType === 'email') {
+        // Email sending not configured - would require SendGrid/Resend setup
+        console.log('Email invite requested - email service not configured');
+        // Member is created but email not sent - show appropriate message
       }
       
-      console.log('=== INVITE SMS DEBUG END ===');
-      res.status(201).json(invite);
+      console.log('=== INVITE DEBUG END ===');
+      res.status(201).json({ 
+        ...invite, 
+        inviteSent, 
+        inviteMethod,
+        emailNotConfigured: contactType === 'email'
+      });
     } catch (err) {
       console.error("Error creating invite:", err);
       res.status(500).json({ message: "Failed to send invite" });
@@ -1616,6 +1630,7 @@ export async function registerRoutes(
       const userId = req.user.claims.sub;
       const leagueId = Number(req.params.id);
       const memberId = Number(req.params.memberId);
+      const { method } = req.body; // 'sms' or 'email'
 
       const league = await storage.getLeague(leagueId);
       if (!league) {
@@ -1631,38 +1646,47 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Member not found" });
       }
 
-      if (!member.phoneNumber) {
-        return res.status(400).json({ message: "Member does not have a phone number" });
-      }
-
       if (member.paidStatus === 'paid') {
         return res.status(400).json({ message: "Member has already paid" });
-      }
-
-      const { sendSMS, isTwilioConfigured } = await import('./twilio');
-      if (!await isTwilioConfigured()) {
-        return res.status(400).json({ message: "SMS not configured" });
       }
 
       const baseUrl = process.env.REPLIT_DEV_DOMAIN 
         ? `https://${process.env.REPLIT_DEV_DOMAIN}` 
         : 'https://your-app.replit.app';
       const leagueUrl = `${baseUrl}/leagues/${leagueId}`;
-      const message = `Hey, nerd. You still haven't paid your dues for ${league.name}. Pay up or shut up.\n\n${leagueUrl}`;
-      
-      const smsResult = await sendSMS(member.phoneNumber, message);
-      
-      if (smsResult.success) {
-        // Log the reminder
-        await storage.createPaymentReminder({
-          leagueId,
-          userId: member.userId,
-          type: 'individual',
-          phoneNumber: member.phoneNumber
-        });
-        res.json({ success: true, messageId: smsResult.messageId });
+
+      if (method === 'email') {
+        if (!member.email) {
+          return res.status(400).json({ message: "Member does not have an email address" });
+        }
+        // Email sending not configured yet - would require SendGrid/Resend setup
+        return res.status(400).json({ message: "Email reminders not configured yet. Please use SMS or contact support to enable email." });
       } else {
-        res.status(500).json({ message: smsResult.error || "Failed to send SMS" });
+        // Default to SMS
+        if (!member.phoneNumber) {
+          return res.status(400).json({ message: "Member does not have a phone number" });
+        }
+
+        const { sendSMS, isTwilioConfigured } = await import('./twilio');
+        if (!await isTwilioConfigured()) {
+          return res.status(400).json({ message: "SMS not configured" });
+        }
+
+        const message = `Hey, nerd. You still haven't paid your dues for ${league.name}. Pay up or shut up.\n\n${leagueUrl}`;
+        
+        const smsResult = await sendSMS(member.phoneNumber, message);
+        
+        if (smsResult.success) {
+          await storage.createPaymentReminder({
+            leagueId,
+            userId: member.userId,
+            type: 'individual',
+            phoneNumber: member.phoneNumber
+          });
+          res.json({ success: true, messageId: smsResult.messageId, method: 'sms' });
+        } else {
+          res.status(500).json({ message: smsResult.error || "Failed to send SMS" });
+        }
       }
     } catch (err) {
       console.error("Error sending reminder:", err);
