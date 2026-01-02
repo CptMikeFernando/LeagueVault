@@ -239,13 +239,33 @@ export default function LeagueDetail() {
                     <span className="text-muted-foreground">Entry Fee</span>
                     <span className="font-mono font-medium">${league.settings?.entryFee || league.settings?.seasonDues || 0}</span>
                   </div>
-                  <div className="flex justify-between text-sm pb-2 border-b">
-                    <span className="text-muted-foreground">Weekly HPS Prize</span>
-                    <span className="font-mono font-medium">${league.settings?.weeklyHighScorePrize || league.settings?.weeklyPayoutAmount || 0}</span>
+                  <div className="bg-muted p-3 rounded-md text-sm space-y-2">
+                    <p className="font-medium text-foreground">Season Payouts:</p>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">1st Place</span>
+                      <span className="font-mono font-medium text-foreground">${league.settings?.firstPlacePayout || 0}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">2nd Place</span>
+                      <span className="font-mono font-medium text-foreground">${league.settings?.secondPlacePayout || 0}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">3rd Place</span>
+                      <span className="font-mono font-medium text-foreground">${league.settings?.thirdPlacePayout || 0}</span>
+                    </div>
                   </div>
-                  <div className="bg-muted p-3 rounded-md text-sm text-muted-foreground">
-                    <p className="font-medium mb-1 text-foreground">Distribution:</p>
-                    {league.settings.payoutRules || "No detailed rules set."}
+                  <div className="bg-muted p-3 rounded-md text-sm space-y-2">
+                    <p className="font-medium text-foreground">Weekly:</p>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">HPS Prize</span>
+                      <span className="font-mono font-medium text-green-600">+${league.settings?.weeklyHighScorePrize || league.settings?.weeklyPayoutAmount || 0}</span>
+                    </div>
+                    {league.settings?.weeklyLowScoreFeeEnabled && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">LPS Fee</span>
+                        <span className="font-mono font-medium text-red-600">-${league.settings?.weeklyLowScoreFee || 0}</span>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -903,10 +923,12 @@ function LeagueSettingsForm({ league }: { league: any }) {
   const settings = league.settings || {};
   
   const [entryFee, setEntryFee] = useState(String(settings.entryFee || settings.seasonDues || 0));
+  const [firstPlacePayout, setFirstPlacePayout] = useState(String(settings.firstPlacePayout || 0));
+  const [secondPlacePayout, setSecondPlacePayout] = useState(String(settings.secondPlacePayout || 0));
+  const [thirdPlacePayout, setThirdPlacePayout] = useState(String(settings.thirdPlacePayout || 0));
   const [weeklyHighScorePrize, setWeeklyHighScorePrize] = useState(String(settings.weeklyHighScorePrize || settings.weeklyPayoutAmount || 0));
   const [weeklyLowScoreFee, setWeeklyLowScoreFee] = useState(String(settings.weeklyLowScoreFee || settings.lowestScorerFee || 0));
   const [weeklyLowScoreFeeEnabled, setWeeklyLowScoreFeeEnabled] = useState(settings.weeklyLowScoreFeeEnabled || settings.lowestScorerFeeEnabled || false);
-  const [payoutRules, setPayoutRules] = useState(settings.payoutRules || "");
 
   const updateSettings = useMutation({
     mutationFn: async (data: any) => {
@@ -933,10 +955,12 @@ function LeagueSettingsForm({ league }: { league: any }) {
     e.preventDefault();
     updateSettings.mutate({
       entryFee: Number(entryFee),
+      firstPlacePayout: Number(firstPlacePayout),
+      secondPlacePayout: Number(secondPlacePayout),
+      thirdPlacePayout: Number(thirdPlacePayout),
       weeklyHighScorePrize: Number(weeklyHighScorePrize),
       weeklyLowScoreFee: Number(weeklyLowScoreFee),
       weeklyLowScoreFeeEnabled,
-      payoutRules,
     });
   };
 
@@ -952,24 +976,83 @@ function LeagueSettingsForm({ league }: { league: any }) {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <Label htmlFor="entryFee">Entry Fee (Per Person)</Label>
-                <div className="relative">
-                  <span className="absolute left-3 top-2.5 text-muted-foreground">$</span>
-                  <Input 
-                    id="entryFee" 
-                    type="number" 
-                    min="0"
-                    className="pl-8 font-mono"
-                    value={entryFee}
-                    onChange={(e) => setEntryFee(e.target.value)}
-                    data-testid="input-settings-entry-fee"
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground">Amount each member pays to join.</p>
+            <div className="space-y-2">
+              <Label htmlFor="entryFee">Entry Fee (Per Person)</Label>
+              <div className="relative">
+                <span className="absolute left-3 top-2.5 text-muted-foreground">$</span>
+                <Input 
+                  id="entryFee" 
+                  type="number" 
+                  min="0"
+                  className="pl-8 font-mono"
+                  value={entryFee}
+                  onChange={(e) => setEntryFee(e.target.value)}
+                  data-testid="input-settings-entry-fee"
+                />
               </div>
+              <p className="text-xs text-muted-foreground">Amount each member pays to join.</p>
+            </div>
 
+            <Separator />
+
+            <div className="space-y-4">
+              <Label className="text-base font-semibold">Season Payouts</Label>
+              <p className="text-xs text-muted-foreground">Set the total payout amounts for end-of-season winners.</p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="firstPlacePayout">1st Place</Label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2.5 text-muted-foreground">$</span>
+                    <Input 
+                      id="firstPlacePayout" 
+                      type="number" 
+                      min="0"
+                      className="pl-8 font-mono"
+                      value={firstPlacePayout}
+                      onChange={(e) => setFirstPlacePayout(e.target.value)}
+                      data-testid="input-settings-first-place"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="secondPlacePayout">2nd Place</Label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2.5 text-muted-foreground">$</span>
+                    <Input 
+                      id="secondPlacePayout" 
+                      type="number" 
+                      min="0"
+                      className="pl-8 font-mono"
+                      value={secondPlacePayout}
+                      onChange={(e) => setSecondPlacePayout(e.target.value)}
+                      data-testid="input-settings-second-place"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="thirdPlacePayout">3rd Place</Label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2.5 text-muted-foreground">$</span>
+                    <Input 
+                      id="thirdPlacePayout" 
+                      type="number" 
+                      min="0"
+                      className="pl-8 font-mono"
+                      value={thirdPlacePayout}
+                      onChange={(e) => setThirdPlacePayout(e.target.value)}
+                      data-testid="input-settings-third-place"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <Separator />
+
+            <div className="space-y-4">
+              <Label className="text-base font-semibold">Weekly Payouts</Label>
+              <p className="text-xs text-muted-foreground">Configure weekly high scorer prize and low scorer penalty.</p>
+              
               <div className="space-y-2">
                 <Label htmlFor="weeklyHighScorePrize">Weekly High Score Prize (HPS)</Label>
                 <div className="relative">
@@ -984,13 +1067,11 @@ function LeagueSettingsForm({ league }: { league: any }) {
                     data-testid="input-settings-weekly-high-prize"
                   />
                 </div>
-                <p className="text-xs text-muted-foreground">Prize for highest scorer each week.</p>
+                <p className="text-xs text-muted-foreground">Prize for highest scorer each week (auto-credited to wallet).</p>
               </div>
-            </div>
 
-            <Separator />
+              <Separator className="my-4" />
 
-            <div className="space-y-4">
               <div className="flex items-center justify-between gap-4">
                 <div className="space-y-0.5">
                   <Label htmlFor="weeklyLowScoreFeeEnabled">Lowest Scorer Fee (LPS)</Label>
@@ -1019,27 +1100,12 @@ function LeagueSettingsForm({ league }: { league: any }) {
                       data-testid="input-settings-weekly-lps-fee"
                     />
                   </div>
-                  <p className="text-xs text-muted-foreground">Amount the lowest scorer must pay each week.</p>
+                  <p className="text-xs text-muted-foreground">Amount the lowest scorer must pay each week (SMS notification sent).</p>
                 </div>
               )}
             </div>
 
-            <Separator />
-
-            <div className="space-y-2">
-              <Label htmlFor="payoutRules">Payout Distribution Rules</Label>
-              <textarea 
-                id="payoutRules" 
-                placeholder="e.g. 1st Place: 60%, 2nd Place: 30%, 3rd Place: 10%"
-                className="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                value={payoutRules}
-                onChange={(e) => setPayoutRules(e.target.value)}
-                data-testid="input-settings-payout-rules"
-              />
-              <p className="text-xs text-muted-foreground">Describe how end-of-season payouts will be distributed.</p>
-            </div>
-
-            <div className="flex justify-end">
+            <div className="flex justify-end pt-4">
               <Button type="submit" disabled={updateSettings.isPending} data-testid="button-save-settings">
                 {updateSettings.isPending ? (
                   "Saving..."
