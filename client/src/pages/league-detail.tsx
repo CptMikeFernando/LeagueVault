@@ -35,11 +35,16 @@ import {
   AlertCircle,
   Building,
   TrendingUp,
-  TrendingDown
+  TrendingDown,
+  RefreshCw,
+  Save
 } from "lucide-react";
 import { useState } from "react";
 import { format } from "date-fns";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { Switch } from "@/components/ui/switch";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function LeagueDetail() {
@@ -159,6 +164,7 @@ export default function LeagueDetail() {
             <>
               <TabsTrigger value="treasury" className="data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-0 py-3 bg-transparent font-medium" data-testid="tab-treasury">Treasury</TabsTrigger>
               <TabsTrigger value="tools" className="data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-0 py-3 bg-transparent font-medium">Commish Tools</TabsTrigger>
+              <TabsTrigger value="settings" className="data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-0 py-3 bg-transparent font-medium" data-testid="tab-settings">Settings</TabsTrigger>
             </>
           )}
         </TabsList>
@@ -323,7 +329,25 @@ export default function LeagueDetail() {
                     <WeeklyScoreForm league={league} />
                   </CardContent>
                 </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                       <RefreshCw className="w-5 h-5 text-blue-500" /> Sync Scores
+                    </CardTitle>
+                    <CardDescription>Pull scores from {league.platform === 'custom' ? 'manual input' : league.platform.toUpperCase()}.</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <SyncScoresForm league={league} />
+                  </CardContent>
+                </Card>
              </div>
+          </TabsContent>
+        )}
+
+        {isCommissioner && (
+          <TabsContent value="settings">
+            <LeagueSettingsForm league={league} />
           </TabsContent>
         )}
       </Tabs>
@@ -742,6 +766,232 @@ function TreasuryTab({ leagueId }: { leagueId: number }) {
               </TableBody>
             </Table>
           )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function SyncScoresForm({ league }: { league: any }) {
+  const [week, setWeek] = useState("1");
+  const { toast } = useToast();
+  
+  const syncScores = useMutation({
+    mutationFn: async (data: { week: number }) => {
+      const response = await apiRequest('POST', `/api/leagues/${league.id}/sync-scores`, data);
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/leagues', league.id] });
+      toast({
+        title: "Scores Synced",
+        description: `${data.scoresUpdated} scores updated from ${data.source}`,
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Sync Failed",
+        description: "Could not sync scores. Please try again.",
+        variant: "destructive",
+      });
+    }
+  });
+
+  const handleSync = (e: React.FormEvent) => {
+    e.preventDefault();
+    syncScores.mutate({ week: Number(week) });
+  };
+
+  return (
+    <form onSubmit={handleSync} className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="sync-week">Week Number</Label>
+        <Input 
+          id="sync-week" 
+          type="number" 
+          min="1" 
+          max="18"
+          value={week}
+          onChange={(e) => setWeek(e.target.value)}
+          data-testid="input-sync-week"
+        />
+      </div>
+      {league.settings?.lastScoreSync && (
+        <p className="text-xs text-muted-foreground">
+          Last synced: {format(new Date(league.settings.lastScoreSync), 'MMM d, yyyy h:mm a')}
+        </p>
+      )}
+      <Button type="submit" className="w-full" disabled={syncScores.isPending} data-testid="button-sync-scores">
+        {syncScores.isPending ? (
+          <>
+            <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+            Syncing...
+          </>
+        ) : (
+          <>
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Sync Week {week} Scores
+          </>
+        )}
+      </Button>
+    </form>
+  );
+}
+
+function LeagueSettingsForm({ league }: { league: any }) {
+  const { toast } = useToast();
+  const settings = league.settings || {};
+  
+  const [entryFee, setEntryFee] = useState(String(settings.entryFee || settings.seasonDues || 0));
+  const [weeklyHighScorePrize, setWeeklyHighScorePrize] = useState(String(settings.weeklyHighScorePrize || settings.weeklyPayoutAmount || 0));
+  const [weeklyLowScoreFee, setWeeklyLowScoreFee] = useState(String(settings.weeklyLowScoreFee || settings.lowestScorerFee || 0));
+  const [weeklyLowScoreFeeEnabled, setWeeklyLowScoreFeeEnabled] = useState(settings.weeklyLowScoreFeeEnabled || settings.lowestScorerFeeEnabled || false);
+  const [payoutRules, setPayoutRules] = useState(settings.payoutRules || "");
+
+  const updateSettings = useMutation({
+    mutationFn: async (data: any) => {
+      const response = await apiRequest('PATCH', `/api/leagues/${league.id}/settings`, data);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/leagues', league.id] });
+      toast({
+        title: "Settings Updated",
+        description: "League payout settings have been saved.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Update Failed",
+        description: "Could not save settings. Please try again.",
+        variant: "destructive",
+      });
+    }
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    updateSettings.mutate({
+      entryFee: Number(entryFee),
+      weeklyHighScorePrize: Number(weeklyHighScorePrize),
+      weeklyLowScoreFee: Number(weeklyLowScoreFee),
+      weeklyLowScoreFeeEnabled,
+      payoutRules,
+    });
+  };
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Settings className="w-5 h-5" />
+            Payout Settings
+          </CardTitle>
+          <CardDescription>Configure entry fees and weekly payouts for your league.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <Label htmlFor="entryFee">Entry Fee (Per Person)</Label>
+                <div className="relative">
+                  <span className="absolute left-3 top-2.5 text-muted-foreground">$</span>
+                  <Input 
+                    id="entryFee" 
+                    type="number" 
+                    min="0"
+                    className="pl-8 font-mono"
+                    value={entryFee}
+                    onChange={(e) => setEntryFee(e.target.value)}
+                    data-testid="input-settings-entry-fee"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">Amount each member pays to join.</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="weeklyHighScorePrize">Weekly High Score Prize (HPS)</Label>
+                <div className="relative">
+                  <span className="absolute left-3 top-2.5 text-muted-foreground">$</span>
+                  <Input 
+                    id="weeklyHighScorePrize" 
+                    type="number" 
+                    min="0"
+                    className="pl-8 font-mono"
+                    value={weeklyHighScorePrize}
+                    onChange={(e) => setWeeklyHighScorePrize(e.target.value)}
+                    data-testid="input-settings-weekly-high-prize"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">Prize for highest scorer each week.</p>
+              </div>
+            </div>
+
+            <Separator />
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between gap-4">
+                <div className="space-y-0.5">
+                  <Label htmlFor="weeklyLowScoreFeeEnabled">Lowest Scorer Fee (LPS)</Label>
+                  <p className="text-xs text-muted-foreground">Charge the lowest scorer each week a penalty fee.</p>
+                </div>
+                <Switch 
+                  id="weeklyLowScoreFeeEnabled"
+                  checked={weeklyLowScoreFeeEnabled}
+                  onCheckedChange={setWeeklyLowScoreFeeEnabled}
+                  data-testid="switch-settings-lps-enabled"
+                />
+              </div>
+
+              {weeklyLowScoreFeeEnabled && (
+                <div className="space-y-2">
+                  <Label htmlFor="weeklyLowScoreFee">Weekly LPS Penalty Amount</Label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2.5 text-muted-foreground">$</span>
+                    <Input 
+                      id="weeklyLowScoreFee" 
+                      type="number" 
+                      min="0"
+                      className="pl-8 font-mono"
+                      value={weeklyLowScoreFee}
+                      onChange={(e) => setWeeklyLowScoreFee(e.target.value)}
+                      data-testid="input-settings-weekly-lps-fee"
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">Amount the lowest scorer must pay each week.</p>
+                </div>
+              )}
+            </div>
+
+            <Separator />
+
+            <div className="space-y-2">
+              <Label htmlFor="payoutRules">Payout Distribution Rules</Label>
+              <textarea 
+                id="payoutRules" 
+                placeholder="e.g. 1st Place: 60%, 2nd Place: 30%, 3rd Place: 10%"
+                className="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                value={payoutRules}
+                onChange={(e) => setPayoutRules(e.target.value)}
+                data-testid="input-settings-payout-rules"
+              />
+              <p className="text-xs text-muted-foreground">Describe how end-of-season payouts will be distributed.</p>
+            </div>
+
+            <div className="flex justify-end">
+              <Button type="submit" disabled={updateSettings.isPending} data-testid="button-save-settings">
+                {updateSettings.isPending ? (
+                  "Saving..."
+                ) : (
+                  <>
+                    <Save className="w-4 h-4 mr-2" />
+                    Save Settings
+                  </>
+                )}
+              </Button>
+            </div>
+          </form>
         </CardContent>
       </Card>
     </div>
