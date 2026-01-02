@@ -389,6 +389,7 @@ export default function LeagueDetail() {
               <LeagueSettingsForm league={league} />
               <EspnSettingsForm league={league} />
               <EspnTeamMappingForm league={league} />
+              <TransferCommissionerSection league={league} />
               <DeleteLeagueSection league={league} />
             </div>
           </TabsContent>
@@ -1606,6 +1607,102 @@ function SendRemindersForm({ league }: { league: any }) {
         SMS notifications require Twilio to be configured.
       </p>
     </div>
+  );
+}
+
+function TransferCommissionerSection({ league }: { league: any }) {
+  const { toast } = useToast();
+  const [selectedMemberId, setSelectedMemberId] = useState<string>("");
+  const [isOpen, setIsOpen] = useState(false);
+
+  const otherMembers = league.members?.filter((m: any) => m.role !== 'commissioner') || [];
+
+  const transferCommissioner = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest('POST', `/api/leagues/${league.id}/transfer-commissioner`, {
+        newCommissionerId: selectedMemberId
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || 'Failed to transfer');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/leagues', league.id] });
+      toast({ title: "Commissioner Transferred", description: "The commissioner role has been transferred." });
+      setIsOpen(false);
+      setSelectedMemberId("");
+    },
+    onError: (err: any) => {
+      toast({ title: "Transfer Failed", description: err.message, variant: "destructive" });
+    }
+  });
+
+  const selectedMember = otherMembers.find((m: any) => m.userId === selectedMemberId);
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Users className="w-5 h-5" />
+          Transfer Commissioner
+        </CardTitle>
+        <CardDescription>
+          Transfer your commissioner role to another league member.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {otherMembers.length === 0 ? (
+          <p className="text-muted-foreground">No other members to transfer to. Invite members first.</p>
+        ) : (
+          <div className="space-y-4">
+            <div>
+              <Label>Select New Commissioner</Label>
+              <Select value={selectedMemberId} onValueChange={setSelectedMemberId}>
+                <SelectTrigger data-testid="select-new-commissioner">
+                  <SelectValue placeholder="Choose a member" />
+                </SelectTrigger>
+                <SelectContent>
+                  {otherMembers.map((member: any) => (
+                    <SelectItem key={member.userId} value={member.userId}>
+                      {member.teamName} ({member.user?.firstName || member.userId.slice(0, 8)})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <AlertDialog open={isOpen} onOpenChange={setIsOpen}>
+              <AlertDialogTrigger asChild>
+                <Button disabled={!selectedMemberId} data-testid="button-transfer-commissioner">
+                  Transfer Commissioner Role
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Transfer Commissioner Role?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    You are about to transfer your commissioner role to <strong>{selectedMember?.teamName}</strong>.
+                    You will become a regular member and lose access to commissioner features. This action cannot be undone by you.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => transferCommissioner.mutate()}
+                    disabled={transferCommissioner.isPending}
+                    data-testid="button-confirm-transfer"
+                  >
+                    {transferCommissioner.isPending ? 'Transferring...' : 'Confirm Transfer'}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

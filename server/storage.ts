@@ -110,6 +110,9 @@ export interface IStorage {
   createLeagueInvite(invite: { leagueId: number; invitedBy: string; contactType: string; contactValue: string; inviteToken: string }): Promise<LeagueInvite>;
   getLeagueInvites(leagueId: number): Promise<LeagueInvite[]>;
   updateInviteStatus(id: number, status: string): Promise<void>;
+
+  // Transfer commissioner
+  transferCommissioner(leagueId: number, newCommissionerId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -654,6 +657,23 @@ export class DatabaseStorage implements IStorage {
 
   async updateInviteStatus(id: number, status: string): Promise<void> {
     await db.update(leagueInvites).set({ status }).where(eq(leagueInvites.id, id));
+  }
+
+  async transferCommissioner(leagueId: number, newCommissionerId: string): Promise<void> {
+    await db.transaction(async (tx) => {
+      // Update league commissioner
+      await tx.update(leagues).set({ commissionerId: newCommissionerId }).where(eq(leagues.id, leagueId));
+      
+      // Update old commissioner's role to member
+      await tx.update(leagueMembers)
+        .set({ role: 'member' })
+        .where(and(eq(leagueMembers.leagueId, leagueId), eq(leagueMembers.role, 'commissioner')));
+      
+      // Update new commissioner's role
+      await tx.update(leagueMembers)
+        .set({ role: 'commissioner' })
+        .where(and(eq(leagueMembers.leagueId, leagueId), eq(leagueMembers.userId, newCommissionerId)));
+    });
   }
 }
 

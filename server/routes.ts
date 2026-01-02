@@ -1489,6 +1489,33 @@ export async function registerRoutes(
     }
   });
 
+  // === TRANSFER COMMISSIONER ===
+  app.post("/api/leagues/:id/transfer-commissioner", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const leagueId = Number(req.params.id);
+      const { newCommissionerId } = req.body;
+
+      // Authorization: Only current commissioner can transfer
+      const league = await storage.getLeague(leagueId);
+      if (!league || league.commissionerId !== userId) {
+        return res.status(403).json({ message: "Only the current commissioner can transfer this role" });
+      }
+
+      // Validate new commissioner is a member
+      const member = await storage.getLeagueMember(leagueId, newCommissionerId);
+      if (!member) {
+        return res.status(400).json({ message: "Selected user is not a member of this league" });
+      }
+
+      await storage.transferCommissioner(leagueId, newCommissionerId);
+      res.json({ success: true, message: "Commissioner role transferred successfully" });
+    } catch (err) {
+      console.error("Error transferring commissioner:", err);
+      res.status(500).json({ message: "Failed to transfer commissioner role" });
+    }
+  });
+
   // === INDIVIDUAL PAYMENT REMINDER ===
   app.post("/api/leagues/:id/members/:memberId/remind", isAuthenticated, async (req: any, res) => {
     try {
