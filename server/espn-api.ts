@@ -57,6 +57,11 @@ export async function fetchEspnScores(
       return { success: false, error: `ESPN API error: ${response.status}` };
     }
 
+    const contentType = response.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      return { success: false, error: 'ESPN returned an invalid response. The league may not exist or requires authentication.' };
+    }
+
     const data = await response.json();
     
     const teams: EspnTeam[] = (data.teams || []).map((team: any) => ({
@@ -127,6 +132,11 @@ export async function fetchEspnTeams(
       return { success: false, error: `ESPN API error: ${response.status}` };
     }
 
+    const contentType = response.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      return { success: false, error: 'ESPN returned an invalid response. The league may not exist or requires authentication.' };
+    }
+
     const data = await response.json();
     
     const teams: EspnTeam[] = (data.teams || []).map((team: any) => ({
@@ -189,6 +199,11 @@ export async function fetchEspnLeagueInfo(
         return { success: false, error: 'ESPN league not found. Check your League ID.' };
       }
       return { success: false, error: `ESPN API error: ${response.status}` };
+    }
+
+    const contentType = response.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      return { success: false, error: 'ESPN returned an invalid response. The league may not exist or requires authentication.' };
     }
 
     const data = await response.json();
