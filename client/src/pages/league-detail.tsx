@@ -594,6 +594,12 @@ function FinancesTab({ league }: { league: any }) {
   const payments = history?.payments || [];
   const payouts = history?.payouts || [];
 
+  // Helper to get team name from userId
+  const getTeamName = (userId: string) => {
+    const member = league.members?.find((m: any) => m.userId === userId);
+    return member?.teamName || 'Unknown Team';
+  };
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
       <Card>
@@ -608,9 +614,9 @@ function FinancesTab({ league }: { league: any }) {
              ) : (
                <div className="space-y-4">
                  {payments.map((p: any) => (
-                   <div key={p.id} className="flex justify-between items-center border-b pb-2 last:border-0">
+                   <div key={p.id} className="flex justify-between items-center border-b pb-2 last:border-0" data-testid={`payment-row-${p.id}`}>
                       <div>
-                        <p className="font-medium text-sm">Payment from Member</p>
+                        <p className="font-medium text-sm">{getTeamName(p.userId)}</p>
                         <p className="text-xs text-muted-foreground">{format(new Date(p.createdAt), 'MMM d, yyyy')}</p>
                       </div>
                       <span className="font-mono font-medium text-green-600">+${Number(p.amount).toFixed(2)}</span>
@@ -634,10 +640,10 @@ function FinancesTab({ league }: { league: any }) {
              ) : (
                <div className="space-y-4">
                  {payouts.map((p: any) => (
-                   <div key={p.id} className="flex justify-between items-center border-b pb-2 last:border-0">
+                   <div key={p.id} className="flex justify-between items-center border-b pb-2 last:border-0" data-testid={`payout-row-${p.id}`}>
                       <div>
-                        <p className="font-medium text-sm capitalize">{p.reason.replace(/_/g, " ")}</p>
-                        <p className="text-xs text-muted-foreground">{format(new Date(p.createdAt), 'MMM d, yyyy')}</p>
+                        <p className="font-medium text-sm">{getTeamName(p.userId)}</p>
+                        <p className="text-xs text-muted-foreground capitalize">{p.reason.replace(/_/g, " ")} - {format(new Date(p.createdAt), 'MMM d, yyyy')}</p>
                       </div>
                       <span className="font-mono font-medium text-red-600">-${Number(p.amount).toFixed(2)}</span>
                    </div>
