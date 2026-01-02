@@ -11,7 +11,7 @@ export function useAdminCheck() {
   });
 }
 
-export function useAdminStats() {
+export function useAdminStats(enabled: boolean = true) {
   return useQuery({
     queryKey: ['/api/admin/stats'],
     queryFn: async () => {
@@ -26,10 +26,11 @@ export function useAdminStats() {
         totalFundsPaidOut: string;
       }>;
     },
+    enabled,
   });
 }
 
-export function useAdminLeagues() {
+export function useAdminLeagues(enabled: boolean = true) {
   return useQuery({
     queryKey: ['/api/admin/leagues'],
     queryFn: async () => {
@@ -37,5 +38,6 @@ export function useAdminLeagues() {
       if (!res.ok) throw new Error('Failed to fetch leagues');
       return res.json();
     },
+    enabled,
   });
 }

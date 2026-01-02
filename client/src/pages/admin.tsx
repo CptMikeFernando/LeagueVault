@@ -44,8 +44,9 @@ function StatCard({
 
 export default function AdminDashboard() {
   const { data: adminCheck, isLoading: checkingAdmin } = useAdminCheck();
-  const { data: stats, isLoading: loadingStats } = useAdminStats();
-  const { data: leagues, isLoading: loadingLeagues } = useAdminLeagues();
+  const isAdmin = adminCheck?.isAdmin === true;
+  const { data: stats, isLoading: loadingStats } = useAdminStats(isAdmin);
+  const { data: leagues, isLoading: loadingLeagues } = useAdminLeagues(isAdmin);
 
   if (checkingAdmin) {
     return (
