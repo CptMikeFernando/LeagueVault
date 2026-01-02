@@ -26,6 +26,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
   const navItems = [
     { label: "Dashboard", href: "/", icon: LayoutDashboard },
+    { label: "My Wallet", href: "/wallet", icon: Wallet },
     { label: "Create League", href: "/create-league", icon: PlusCircle },
   ];
 

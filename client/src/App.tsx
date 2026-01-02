@@ -12,6 +12,7 @@ import Dashboard from "@/pages/dashboard";
 import CreateLeague from "@/pages/create-league";
 import LeagueDetail from "@/pages/league-detail";
 import AdminDashboard from "@/pages/admin";
+import MyWallet from "@/pages/my-wallet";
 import { Shell } from "@/components/layout-shell";
 
 function Router() {
@@ -39,6 +40,7 @@ function Router() {
       <Switch>
         <Route path="/" component={Dashboard} />
         <Route path="/dashboard" component={Dashboard} />
+        <Route path="/wallet" component={MyWallet} />
         <Route path="/create-league" component={CreateLeague} />
         <Route path="/league/:id" component={LeagueDetail} />
         <Route path="/admin" component={AdminDashboard} />
