@@ -44,7 +44,10 @@ import {
   Link2,
   Calculator,
   Trash2,
-  Send
+  Send,
+  Mail,
+  UserPlus,
+  Bell
 } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useState } from "react";
@@ -260,11 +263,14 @@ export default function LeagueDetail() {
 
         <TabsContent value="members">
           <Card>
-            <CardHeader>
-              <CardTitle>League Members</CardTitle>
-              <CardDescription>{league.members.length} teams competing</CardDescription>
+            <CardHeader className="flex flex-row items-center justify-between gap-4 flex-wrap">
+              <div>
+                <CardTitle>League Members</CardTitle>
+                <CardDescription>{league.members.length} teams competing</CardDescription>
+              </div>
+              {isCommissioner && <InviteMemberDialog leagueId={league.id} />}
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-6">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -272,6 +278,7 @@ export default function LeagueDetail() {
                     <TableHead>Team Name</TableHead>
                     <TableHead>Role</TableHead>
                     <TableHead>Status</TableHead>
+                    {isCommissioner && <TableHead>Reminder</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -292,10 +299,19 @@ export default function LeagueDetail() {
                           {member.paidStatus}
                         </Badge>
                       </TableCell>
+                      {isCommissioner && (
+                        <TableCell>
+                          {member.paidStatus !== 'paid' && (
+                            <SendReminderButton leagueId={league.id} memberId={member.id} hasPhone={!!member.phoneNumber} />
+                          )}
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
+              
+              {isCommissioner && <PendingInvitesSection leagueId={league.id} />}
             </CardContent>
           </Card>
         </TabsContent>
@@ -1689,6 +1705,168 @@ function DeleteLeagueSection({ league }: { league: any }) {
         </AlertDialog>
       </CardContent>
     </Card>
+  );
+}
+
+function InviteMemberDialog({ leagueId }: { leagueId: number }) {
+  const [open, setOpen] = useState(false);
+  const [contactType, setContactType] = useState<'phone' | 'email'>('phone');
+  const [contactValue, setContactValue] = useState('');
+  const { toast } = useToast();
+
+  const sendInvite = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest('POST', `/api/leagues/${leagueId}/invites`, {
+        contactType,
+        contactValue
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || 'Failed to send invite');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/leagues', leagueId, 'invites'] });
+      toast({ title: "Invite sent!", description: `Invitation sent via ${contactType === 'phone' ? 'SMS' : 'email'}` });
+      setOpen(false);
+      setContactValue('');
+    },
+    onError: (err: any) => {
+      toast({ title: "Failed to send invite", description: err.message, variant: "destructive" });
+    }
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button data-testid="button-invite-member">
+          <UserPlus className="w-4 h-4 mr-2" />
+          Invite Members
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Invite a Member</DialogTitle>
+          <DialogDescription>Send an invite via phone number or email address</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="flex gap-2">
+            <Button
+              variant={contactType === 'phone' ? 'default' : 'outline'}
+              onClick={() => setContactType('phone')}
+              className="flex-1"
+              data-testid="button-invite-phone"
+            >
+              <Phone className="w-4 h-4 mr-2" />
+              Phone
+            </Button>
+            <Button
+              variant={contactType === 'email' ? 'default' : 'outline'}
+              onClick={() => setContactType('email')}
+              className="flex-1"
+              data-testid="button-invite-email"
+            >
+              <Mail className="w-4 h-4 mr-2" />
+              Email
+            </Button>
+          </div>
+          <div>
+            <Label>{contactType === 'phone' ? 'Phone Number' : 'Email Address'}</Label>
+            <Input
+              placeholder={contactType === 'phone' ? '+1234567890' : 'member@example.com'}
+              value={contactValue}
+              onChange={(e) => setContactValue(e.target.value)}
+              data-testid="input-invite-contact"
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+          <Button
+            onClick={() => sendInvite.mutate()}
+            disabled={!contactValue.trim() || sendInvite.isPending}
+            data-testid="button-send-invite"
+          >
+            {sendInvite.isPending ? 'Sending...' : 'Send Invite'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function SendReminderButton({ leagueId, memberId, hasPhone }: { leagueId: number; memberId: number; hasPhone: boolean }) {
+  const { toast } = useToast();
+
+  const sendReminder = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest('POST', `/api/leagues/${leagueId}/members/${memberId}/remind`, {});
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || 'Failed to send reminder');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Reminder sent!", description: "Payment reminder sent via SMS" });
+    },
+    onError: (err: any) => {
+      toast({ title: "Failed", description: err.message, variant: "destructive" });
+    }
+  });
+
+  if (!hasPhone) {
+    return (
+      <span className="text-sm text-muted-foreground">No phone</span>
+    );
+  }
+
+  return (
+    <Button
+      size="sm"
+      variant="ghost"
+      onClick={() => sendReminder.mutate()}
+      disabled={sendReminder.isPending}
+      data-testid={`button-remind-${memberId}`}
+    >
+      <Bell className="w-4 h-4" />
+    </Button>
+  );
+}
+
+function PendingInvitesSection({ leagueId }: { leagueId: number }) {
+  const { data: invites, isLoading } = useQuery<any[]>({
+    queryKey: ['/api/leagues', leagueId, 'invites'],
+    queryFn: async () => {
+      const res = await fetch(`/api/leagues/${leagueId}/invites`);
+      return res.json();
+    }
+  });
+
+  const pendingInvites = invites?.filter(i => i.status === 'pending' || i.status === 'sent') || [];
+
+  if (isLoading || pendingInvites.length === 0) return null;
+
+  return (
+    <div className="pt-4 border-t">
+      <h4 className="font-medium mb-3">Pending Invites</h4>
+      <div className="space-y-2">
+        {pendingInvites.map((invite: any) => (
+          <div key={invite.id} className="flex items-center justify-between p-2 bg-muted/30 rounded-md">
+            <div className="flex items-center gap-2">
+              {invite.contactType === 'phone' ? (
+                <Phone className="w-4 h-4 text-muted-foreground" />
+              ) : (
+                <Mail className="w-4 h-4 text-muted-foreground" />
+              )}
+              <span className="text-sm">{invite.contactValue}</span>
+            </div>
+            <Badge variant="outline" className="capitalize">{invite.status}</Badge>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 

@@ -1414,6 +1414,138 @@ export async function registerRoutes(
     }
   });
 
+  // === LEAGUE INVITES ===
+  app.post("/api/leagues/:id/invites", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const leagueId = Number(req.params.id);
+      const { contactType, contactValue } = req.body;
+
+      if (!contactType || !contactValue) {
+        return res.status(400).json({ message: "Contact type and value are required" });
+      }
+
+      if (contactType !== 'phone' && contactType !== 'email') {
+        return res.status(400).json({ message: "Contact type must be 'phone' or 'email'" });
+      }
+
+      const league = await storage.getLeague(leagueId);
+      if (!league) {
+        return res.status(404).json({ message: "League not found" });
+      }
+
+      if (league.commissionerId !== userId) {
+        return res.status(403).json({ message: "Only commissioners can invite members" });
+      }
+
+      const inviteToken = crypto.randomUUID();
+      const invite = await storage.createLeagueInvite({
+        leagueId,
+        invitedBy: userId,
+        contactType,
+        contactValue,
+        inviteToken
+      });
+
+      // Send invite via SMS if phone
+      if (contactType === 'phone') {
+        const { sendSMS, isTwilioConfigured } = await import('./twilio');
+        if (await isTwilioConfigured()) {
+          const baseUrl = process.env.REPLIT_DEV_DOMAIN 
+            ? `https://${process.env.REPLIT_DEV_DOMAIN}` 
+            : 'https://your-app.replit.app';
+          const message = `You've been invited to join "${league.name}" on LeagueVault! Sign up here: ${baseUrl}`;
+          
+          const smsResult = await sendSMS(contactValue, message);
+          if (smsResult.success) {
+            await storage.updateInviteStatus(invite.id, 'sent');
+          }
+        }
+      }
+
+      res.status(201).json(invite);
+    } catch (err) {
+      console.error("Error creating invite:", err);
+      res.status(500).json({ message: "Failed to send invite" });
+    }
+  });
+
+  app.get("/api/leagues/:id/invites", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const leagueId = Number(req.params.id);
+      
+      // Authorization: Only commissioner can view invites
+      const league = await storage.getLeague(leagueId);
+      if (!league || league.commissionerId !== userId) {
+        return res.status(403).json({ message: "Only commissioners can view invites" });
+      }
+      
+      const invites = await storage.getLeagueInvites(leagueId);
+      res.json(invites);
+    } catch (err) {
+      console.error("Error fetching invites:", err);
+      res.status(500).json({ message: "Failed to fetch invites" });
+    }
+  });
+
+  // === INDIVIDUAL PAYMENT REMINDER ===
+  app.post("/api/leagues/:id/members/:memberId/remind", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const leagueId = Number(req.params.id);
+      const memberId = Number(req.params.memberId);
+
+      const league = await storage.getLeague(leagueId);
+      if (!league) {
+        return res.status(404).json({ message: "League not found" });
+      }
+
+      if (league.commissionerId !== userId) {
+        return res.status(403).json({ message: "Only commissioners can send reminders" });
+      }
+
+      const member = league.members?.find((m: any) => m.id === memberId);
+      if (!member) {
+        return res.status(404).json({ message: "Member not found" });
+      }
+
+      if (!member.phoneNumber) {
+        return res.status(400).json({ message: "Member does not have a phone number" });
+      }
+
+      if (member.paidStatus === 'paid') {
+        return res.status(400).json({ message: "Member has already paid" });
+      }
+
+      const { sendSMS, isTwilioConfigured } = await import('./twilio');
+      if (!await isTwilioConfigured()) {
+        return res.status(400).json({ message: "SMS not configured" });
+      }
+
+      const entryFee = league.settings?.entryFee || league.settings?.seasonDues || 0;
+      const message = `Reminder: Your $${entryFee} dues for "${league.name}" are still unpaid. Please pay at your earliest convenience. - LeagueVault`;
+      
+      const smsResult = await sendSMS(member.phoneNumber, message);
+      
+      if (smsResult.success) {
+        // Log the reminder
+        await storage.createPaymentReminder({
+          leagueId,
+          userId: member.userId,
+          type: 'individual',
+          phoneNumber: member.phoneNumber
+        });
+        res.json({ success: true, messageId: smsResult.messageId });
+      } else {
+        res.status(500).json({ message: smsResult.error || "Failed to send SMS" });
+      }
+    } catch (err) {
+      console.error("Error sending reminder:", err);
+      res.status(500).json({ message: "Failed to send reminder" });
+    }
+  });
+
   // === SPORTS SCORES (ESPN unofficial API) ===
   app.get("/api/sports/scores", async (req, res) => {
     try {

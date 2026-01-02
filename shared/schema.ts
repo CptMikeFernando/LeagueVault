@@ -321,6 +321,26 @@ export const leagueMessagesRelations = relations(leagueMessages, ({ one }) => ({
   }),
 }));
 
+// === LEAGUE INVITES ===
+export const leagueInvites = pgTable("league_invites", {
+  id: serial("id").primaryKey(),
+  leagueId: integer("league_id").notNull(),
+  invitedBy: text("invited_by").notNull(),
+  contactType: text("contact_type").notNull(), // 'phone' or 'email'
+  contactValue: text("contact_value").notNull(), // phone number or email
+  status: text("status").notNull().default("pending"), // 'pending', 'sent', 'accepted', 'expired'
+  inviteToken: text("invite_token").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  acceptedAt: timestamp("accepted_at"),
+});
+
+export const leagueInvitesRelations = relations(leagueInvites, ({ one }) => ({
+  league: one(leagues, {
+    fields: [leagueInvites.leagueId],
+    references: [leagues.id],
+  }),
+}));
+
 // === ZOD SCHEMAS ===
 export const insertLeagueSchema = createInsertSchema(leagues).omit({ id: true, createdAt: true, totalDues: true });
 export const insertPaymentReminderSchema = createInsertSchema(paymentReminders).omit({ id: true, createdAt: true, sentAt: true, status: true });
@@ -334,6 +354,7 @@ export const insertMemberWalletSchema = createInsertSchema(memberWallets).omit({
 export const insertWalletTransactionSchema = createInsertSchema(walletTransactions).omit({ id: true, createdAt: true });
 export const insertWithdrawalRequestSchema = createInsertSchema(withdrawalRequests).omit({ id: true, requestedAt: true, processedAt: true, status: true, stripeTransferId: true, failureReason: true });
 export const insertLeagueMessageSchema = createInsertSchema(leagueMessages).omit({ id: true, createdAt: true });
+export const insertLeagueInviteSchema = createInsertSchema(leagueInvites).omit({ id: true, createdAt: true, acceptedAt: true, status: true });
 
 // === TYPES ===
 export type League = typeof leagues.$inferSelect;
@@ -360,5 +381,7 @@ export type PaymentReminder = typeof paymentReminders.$inferSelect;
 export type InsertPaymentReminder = z.infer<typeof insertPaymentReminderSchema>;
 export type LeagueMessage = typeof leagueMessages.$inferSelect;
 export type InsertLeagueMessage = z.infer<typeof insertLeagueMessageSchema>;
+export type LeagueInvite = typeof leagueInvites.$inferSelect;
+export type InsertLeagueInvite = z.infer<typeof insertLeagueInviteSchema>;
 
 export type LeagueWithMembers = League & { members: (LeagueMember & { user: typeof users.$inferSelect })[] };

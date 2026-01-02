@@ -1,7 +1,7 @@
 import { db } from "./db";
 import { 
   users, leagues, leagueMembers, payments, payouts, weeklyScores, platformFees,
-  memberWallets, walletTransactions, withdrawalRequests, lpsPaymentRequests, paymentReminders, leagueMessages,
+  memberWallets, walletTransactions, withdrawalRequests, lpsPaymentRequests, paymentReminders, leagueMessages, leagueInvites,
   type User,
   type League, type InsertLeague,
   type LeagueMember, type InsertLeagueMember,
@@ -15,6 +15,7 @@ import {
   type LpsPaymentRequest, type InsertLpsPaymentRequest,
   type PaymentReminder, type InsertPaymentReminder,
   type LeagueMessage,
+  type LeagueInvite,
   type LeagueWithMembers
 } from "@shared/schema";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
@@ -104,6 +105,11 @@ export interface IStorage {
   getLeagueMessages(leagueId: number, limit?: number): Promise<(LeagueMessage & { user?: User })[]>;
   getLeagueMessage(messageId: number): Promise<LeagueMessage | undefined>;
   deleteLeagueMessage(messageId: number): Promise<void>;
+
+  // League invites
+  createLeagueInvite(invite: { leagueId: number; invitedBy: string; contactType: string; contactValue: string; inviteToken: string }): Promise<LeagueInvite>;
+  getLeagueInvites(leagueId: number): Promise<LeagueInvite[]>;
+  updateInviteStatus(id: number, status: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -634,6 +640,20 @@ export class DatabaseStorage implements IStorage {
 
   async deleteLeagueMessage(messageId: number): Promise<void> {
     await db.delete(leagueMessages).where(eq(leagueMessages.id, messageId));
+  }
+
+  // League invites
+  async createLeagueInvite(invite: { leagueId: number; invitedBy: string; contactType: string; contactValue: string; inviteToken: string }): Promise<LeagueInvite> {
+    const [result] = await db.insert(leagueInvites).values(invite).returning();
+    return result;
+  }
+
+  async getLeagueInvites(leagueId: number): Promise<LeagueInvite[]> {
+    return db.select().from(leagueInvites).where(eq(leagueInvites.leagueId, leagueId)).orderBy(desc(leagueInvites.createdAt));
+  }
+
+  async updateInviteStatus(id: number, status: string): Promise<void> {
+    await db.update(leagueInvites).set({ status }).where(eq(leagueInvites.id, id));
   }
 }
 
