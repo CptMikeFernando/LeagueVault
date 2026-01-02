@@ -92,6 +92,7 @@ export function useJoinLeague() {
 }
 
 export function useSyncPlatform() {
+  const queryClient = useQueryClient();
   const { toast } = useToast();
   
   return useMutation({
@@ -107,14 +108,15 @@ export function useSyncPlatform() {
       return api.leagues.syncPlatform.responses[200].parse(await res.json());
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.leagues.list.path] });
       toast({
-        title: "Sync Successful",
-        description: "League details retrieved from platform.",
+        title: "League Imported",
+        description: "Your league has been created from platform data.",
       });
     },
     onError: (error: Error) => {
       toast({
-        title: "Sync Failed",
+        title: "Import Failed",
         description: error.message,
         variant: "destructive",
       });

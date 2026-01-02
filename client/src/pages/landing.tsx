@@ -73,8 +73,10 @@ export default function Landing() {
                 variant="outline" 
                 size="lg" 
                 className="h-12 px-8 text-lg rounded-full"
+                onClick={() => window.location.href = "/api/login"}
+                data-testid="button-join-league"
               >
-                View Demo
+                Join A League
               </Button>
             </div>
           </motion.div>

@@ -104,21 +104,50 @@ export async function registerRoutes(
   });
 
   // === INTEGRATIONS (Mock ESPN/Yahoo) ===
-  app.post(api.leagues.syncPlatform.path, isAuthenticated, async (req, res) => {
+  app.post(api.leagues.syncPlatform.path, isAuthenticated, async (req: any, res) => {
     try {
       const { platform, leagueUrl } = req.body;
+      const userId = req.user.claims.sub;
       
       // Simulate API delay
       await new Promise(resolve => setTimeout(resolve, 1500));
       
-      // Mock response simulating ESPN/Yahoo data
+      // Mock data simulating ESPN/Yahoo response
+      const mockData = {
+        name: `${platform.toUpperCase()} Fantasy League 2025`,
+        seasonYear: 2025,
+        externalId: `mock-${platform}-${Date.now()}`
+      };
+
+      // Actually create the league in the database
+      const league = await storage.createLeague({
+        name: mockData.name,
+        commissionerId: userId,
+        platform: platform,
+        externalLeagueId: mockData.externalId,
+        seasonYear: mockData.seasonYear,
+        totalDues: "0",
+        settings: {
+          weeklyPayoutAmount: 0,
+          seasonDues: 100,
+          payoutRules: "Standard payout rules",
+          lowestScorerFee: 0,
+          lowestScorerFeeEnabled: false
+        }
+      });
+
+      // Add the user as commissioner member
+      await storage.addLeagueMember({
+        leagueId: league.id,
+        userId,
+        role: 'commissioner',
+        teamName: 'Commissioner Team',
+        paidStatus: 'unpaid'
+      });
+
       res.json({
         success: true,
-        data: {
-          name: `${platform.toUpperCase()} Fantasy League 2025`,
-          seasonYear: 2025,
-          externalId: `mock-${platform}-${Date.now()}`
-        }
+        data: mockData
       });
     } catch (err) {
       console.error("Error syncing platform:", err);
