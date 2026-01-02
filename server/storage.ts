@@ -84,6 +84,7 @@ export interface IStorage {
 
   // Member phone number
   updateMemberPhoneNumber(memberId: number, phoneNumber: string): Promise<void>;
+  updateMemberEspnTeamId(memberId: number, espnTeamId: string): Promise<void>;
   getUnpaidMembersWithPhone(leagueId: number): Promise<LeagueMember[]>;
 
   // Payment reminders
@@ -484,6 +485,11 @@ export class DatabaseStorage implements IStorage {
   // Member phone number methods
   async updateMemberPhoneNumber(memberId: number, phoneNumber: string): Promise<void> {
     await db.update(leagueMembers).set({ phoneNumber })
+      .where(eq(leagueMembers.id, memberId));
+  }
+
+  async updateMemberEspnTeamId(memberId: number, espnTeamId: string): Promise<void> {
+    await db.update(leagueMembers).set({ externalTeamId: espnTeamId })
       .where(eq(leagueMembers.id, memberId));
   }
 

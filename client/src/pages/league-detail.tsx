@@ -39,7 +39,8 @@ import {
   RefreshCw,
   Save,
   Phone,
-  MessageSquare
+  MessageSquare,
+  Link2
 } from "lucide-react";
 import { useState } from "react";
 import { format } from "date-fns";
@@ -381,7 +382,11 @@ export default function LeagueDetail() {
 
         {isCommissioner && (
           <TabsContent value="settings">
-            <LeagueSettingsForm league={league} />
+            <div className="space-y-6">
+              <LeagueSettingsForm league={league} />
+              <EspnSettingsForm league={league} />
+              <EspnTeamMappingForm league={league} />
+            </div>
           </TabsContent>
         )}
       </Tabs>
@@ -836,6 +841,20 @@ function SyncScoresForm({ league }: { league: any }) {
         description += ` | LPS fee requested: $${data.automation.lpsAmount}`;
       }
       
+      // Show warning if ESPN failed
+      if (data.espnError) {
+        toast({
+          title: "ESPN Sync Failed",
+          description: `${data.espnError}. Using mock scores instead.`,
+          variant: "destructive",
+        });
+      } else if (data.unmappedMembers?.length > 0) {
+        toast({
+          title: "Some Members Unmapped",
+          description: `${data.unmappedMembers.length} member(s) don't have ESPN teams linked. Check team mapping in Settings.`,
+        });
+      }
+      
       toast({
         title: "Scores Synced",
         description,
@@ -1121,6 +1140,254 @@ function LeagueSettingsForm({ league }: { league: any }) {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+function EspnSettingsForm({ league }: { league: any }) {
+  const { toast } = useToast();
+  const settings = league.settings || {};
+  
+  const [espnLeagueId, setEspnLeagueId] = useState(settings.espnLeagueId || "");
+  const [espnSeasonId, setEspnSeasonId] = useState(settings.espnSeasonId || new Date().getFullYear().toString());
+  const [espnPrivateLeague, setEspnPrivateLeague] = useState(settings.espnPrivateLeague || false);
+  const [espnS2, setEspnS2] = useState(settings.espnS2 || "");
+  const [espnSwid, setEspnSwid] = useState(settings.espnSwid || "");
+
+  const updateSettings = useMutation({
+    mutationFn: async (data: any) => {
+      const response = await apiRequest('PATCH', `/api/leagues/${league.id}/settings`, data);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/leagues', league.id] });
+      toast({
+        title: "ESPN Settings Saved",
+        description: "Your ESPN integration settings have been updated.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Update Failed",
+        description: "Could not save ESPN settings. Please try again.",
+        variant: "destructive",
+      });
+    }
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    updateSettings.mutate({
+      espnLeagueId,
+      espnSeasonId,
+      espnPrivateLeague,
+      espnS2: espnPrivateLeague ? espnS2 : undefined,
+      espnSwid: espnPrivateLeague ? espnSwid : undefined,
+    });
+  };
+
+  if (league.platform !== 'espn') {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Link2 className="w-5 h-5" />
+            ESPN Integration
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">
+            ESPN integration is only available for leagues with ESPN as their platform.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Link2 className="w-5 h-5" />
+          ESPN Integration
+        </CardTitle>
+        <CardDescription>Connect your ESPN Fantasy Football league to sync real scores.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="espnLeagueId">ESPN League ID</Label>
+              <Input 
+                id="espnLeagueId" 
+                placeholder="e.g. 12345678"
+                value={espnLeagueId}
+                onChange={(e) => setEspnLeagueId(e.target.value)}
+                data-testid="input-espn-league-id"
+              />
+              <p className="text-xs text-muted-foreground">Find this in your ESPN league URL</p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="espnSeasonId">Season Year</Label>
+              <Input 
+                id="espnSeasonId" 
+                placeholder="e.g. 2025"
+                value={espnSeasonId}
+                onChange={(e) => setEspnSeasonId(e.target.value)}
+                data-testid="input-espn-season-id"
+              />
+            </div>
+          </div>
+
+          <Separator />
+
+          <div className="space-y-4">
+            <div className="flex items-center justify-between gap-4">
+              <div className="space-y-0.5">
+                <Label htmlFor="espnPrivateLeague">Private League</Label>
+                <p className="text-xs text-muted-foreground">Enable if your ESPN league is private</p>
+              </div>
+              <Switch 
+                id="espnPrivateLeague"
+                checked={espnPrivateLeague}
+                onCheckedChange={setEspnPrivateLeague}
+                data-testid="switch-espn-private"
+              />
+            </div>
+
+            {espnPrivateLeague && (
+              <div className="space-y-4 p-4 bg-muted rounded-lg">
+                <p className="text-sm text-muted-foreground">
+                  For private leagues, you need to provide your ESPN cookies. 
+                  Find these in your browser developer tools after logging into ESPN.
+                </p>
+                <div className="space-y-2">
+                  <Label htmlFor="espnS2">espn_s2 Cookie</Label>
+                  <Input 
+                    id="espnS2" 
+                    type="password"
+                    placeholder="Your espn_s2 cookie value"
+                    value={espnS2}
+                    onChange={(e) => setEspnS2(e.target.value)}
+                    data-testid="input-espn-s2"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="espnSwid">SWID Cookie</Label>
+                  <Input 
+                    id="espnSwid" 
+                    type="password"
+                    placeholder="Your SWID cookie value"
+                    value={espnSwid}
+                    onChange={(e) => setEspnSwid(e.target.value)}
+                    data-testid="input-espn-swid"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end">
+            <Button type="submit" disabled={updateSettings.isPending} data-testid="button-save-espn">
+              {updateSettings.isPending ? "Saving..." : "Save ESPN Settings"}
+            </Button>
+          </div>
+        </form>
+      </CardContent>
+    </Card>
+  );
+}
+
+function EspnTeamMappingForm({ league }: { league: any }) {
+  const { toast } = useToast();
+  const settings = league.settings || {};
+  
+  const { data: espnTeams, isLoading, error, refetch } = useQuery<{ teams: any[] }>({
+    queryKey: ['/api/leagues', league.id, 'espn-teams'],
+    queryFn: async () => {
+      const res = await fetch(`/api/leagues/${league.id}/espn-teams`, { credentials: 'include' });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || 'Failed to fetch ESPN teams');
+      }
+      return res.json();
+    },
+    enabled: league.platform === 'espn' && !!settings.espnLeagueId,
+    retry: false,
+  });
+
+  const updateMapping = useMutation({
+    mutationFn: async ({ memberId, espnTeamId }: { memberId: number; espnTeamId: string }) => {
+      const response = await apiRequest('PATCH', `/api/leagues/${league.id}/members/${memberId}/espn-team`, { espnTeamId });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/leagues', league.id] });
+      toast({
+        title: "Team Mapped",
+        description: "ESPN team mapping updated successfully.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Mapping Failed",
+        description: "Could not update team mapping.",
+        variant: "destructive",
+      });
+    }
+  });
+
+  if (league.platform !== 'espn' || !settings.espnLeagueId) {
+    return null;
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Users className="w-5 h-5" />
+          ESPN Team Mapping
+        </CardTitle>
+        <CardDescription>Link your league members to their ESPN teams for score syncing.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <Skeleton className="h-32 w-full" />
+        ) : error ? (
+          <div className="text-center py-4 space-y-2">
+            <p className="text-sm text-red-600">{(error as Error).message}</p>
+            <Button variant="outline" size="sm" onClick={() => refetch()}>
+              Try Again
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {league.members?.map((member: any) => (
+              <div key={member.id} className="flex items-center justify-between gap-4 p-3 bg-muted rounded-lg" data-testid={`espn-mapping-${member.id}`}>
+                <div>
+                  <p className="font-medium text-sm">{member.teamName}</p>
+                  <p className="text-xs text-muted-foreground">User {member.userId.slice(0, 8)}...</p>
+                </div>
+                <Select 
+                  value={member.externalTeamId || ""} 
+                  onValueChange={(value) => updateMapping.mutate({ memberId: member.id, espnTeamId: value })}
+                >
+                  <SelectTrigger className="w-[200px]" data-testid={`select-espn-team-${member.id}`}>
+                    <SelectValue placeholder="Select ESPN Team" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {espnTeams?.teams?.map((team: any) => (
+                      <SelectItem key={team.id} value={String(team.id)}>
+                        {team.name || team.abbrev}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

@@ -88,6 +88,14 @@ The `shared/` directory contains code used by both frontend and backend:
 - **League Start Date**: Leagues can have a start date set for scheduling purposes
 - **Manual Trigger**: Commissioners can send reminders to all unpaid members
 
+### ESPN Integration
+- **Real Score Syncing**: When ESPN League ID is configured, scores are fetched from ESPN's Fantasy Football API
+- **Team Mapping**: Commissioners can map league members to ESPN teams for accurate score syncing
+- **Private League Support**: For private ESPN leagues, commissioners can provide espn_s2 and SWID cookies
+- **API Endpoints Used**:
+  - `https://fantasy.espn.com/apis/v3/games/ffl/seasons/{SEASON}/segments/0/leagues/{LEAGUE_ID}?view=mTeam&view=mMatchupScore`
+- **Fallback**: If ESPN integration fails or isn't configured, mock scores are generated
+
 ### Pending Integrations
 - **Twilio SMS**: Configured and active. SMS notifications are sent for:
   - LPS payment requests (automatically on score sync)

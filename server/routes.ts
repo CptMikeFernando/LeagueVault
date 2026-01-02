@@ -184,7 +184,7 @@ export async function registerRoutes(
     }
   });
 
-  // Sync scores from platform (mock ESPN/Yahoo API)
+  // Sync scores from platform (ESPN API or mock)
   app.post(api.leagues.syncScores.path, isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
@@ -200,35 +200,81 @@ export async function registerRoutes(
         return res.status(403).json({ message: "Only commissioner can sync scores" });
       }
 
-      // Simulate fetching scores from ESPN/Yahoo API
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Get all league members and generate mock scores
       const members = league.members || [];
       let scoresUpdated = 0;
-      
-      for (const member of members) {
-        // Generate a random score between 80 and 180
-        const mockScore = (80 + Math.random() * 100).toFixed(2);
+      const settings = league.settings || {};
+      let dataSource = 'mock';
+      let espnError = '';
+      let espnSuccess = false;
+      let unmappedMembers: string[] = [];
+
+      // Check if ESPN is configured
+      if (league.platform === 'espn' && settings.espnLeagueId) {
+        const { fetchEspnScores } = await import('./espn-api');
+        const seasonId = settings.espnSeasonId || new Date().getFullYear().toString();
+        const cookies = settings.espnPrivateLeague ? {
+          espnS2: settings.espnS2,
+          swid: settings.espnSwid
+        } : undefined;
+
+        const espnResult = await fetchEspnScores(settings.espnLeagueId, seasonId, week, cookies);
         
-        // Check if score already exists for this member/week
+        if (espnResult.success && espnResult.data) {
+          dataSource = 'espn';
+          espnSuccess = true;
+          
+          // Get existing scores once for efficiency
+          const existingScores = await storage.getWeeklyScores(leagueId, week);
+          
+          for (const member of members) {
+            if (member.externalTeamId) {
+              const espnScore = espnResult.data.weeklyScores.get(Number(member.externalTeamId));
+              if (espnScore !== undefined) {
+                const hasExisting = existingScores.some(s => s.userId === member.userId);
+                
+                if (!hasExisting) {
+                  await storage.addWeeklyScore({
+                    leagueId,
+                    userId: member.userId,
+                    week,
+                    score: String(espnScore.toFixed(2)),
+                    source: 'espn'
+                  });
+                  scoresUpdated++;
+                }
+              }
+            } else {
+              unmappedMembers.push(member.teamName || member.userId);
+            }
+          }
+        } else {
+          espnError = espnResult.error || 'Failed to fetch ESPN scores';
+          console.log(`[ESPN] Error fetching scores: ${espnError}, falling back to mock data`);
+        }
+      }
+
+      // Fall back to mock scores if ESPN not configured or failed
+      if (!espnSuccess) {
         const existingScores = await storage.getWeeklyScores(leagueId, week);
-        const hasExisting = existingScores.some(s => s.userId === member.userId);
         
-        if (!hasExisting) {
-          await storage.addWeeklyScore({
-            leagueId,
-            userId: member.userId,
-            week,
-            score: mockScore,
-            source: league.platform === 'custom' ? 'manual' : league.platform
-          });
-          scoresUpdated++;
+        for (const member of members) {
+          const mockScore = (80 + Math.random() * 100).toFixed(2);
+          const hasExisting = existingScores.some(s => s.userId === member.userId);
+          
+          if (!hasExisting) {
+            await storage.addWeeklyScore({
+              leagueId,
+              userId: member.userId,
+              week,
+              score: mockScore,
+              source: 'mock'
+            });
+            scoresUpdated++;
+          }
         }
       }
 
       // Get league settings for automated payouts
-      const settings = league.settings || {};
       const hpsPrize = settings.weeklyHighScorePrize || settings.weeklyPayoutAmount || 0;
       const lpsEnabled = settings.weeklyLowScoreFeeEnabled || settings.lowestScorerFeeEnabled || false;
       const lpsFee = settings.weeklyLowScoreFee || settings.lowestScorerFee || 0;
@@ -322,7 +368,9 @@ export async function registerRoutes(
       res.json({ 
         success: true, 
         scoresUpdated,
-        source: league.platform === 'custom' ? 'manual' : league.platform,
+        source: dataSource,
+        espnError: espnError || undefined,
+        unmappedMembers: unmappedMembers.length > 0 ? unmappedMembers : undefined,
         automation: {
           hpsPayoutCreated,
           hpsRecipient: highScorer?.userId,
@@ -917,6 +965,78 @@ export async function registerRoutes(
     } catch (err) {
       console.error("Error creating payment intent:", err);
       res.status(500).json({ message: "Failed to create payment" });
+    }
+  });
+
+  // === ESPN INTEGRATION ===
+  // Fetch ESPN teams for mapping
+  app.get("/api/leagues/:id/espn-teams", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const leagueId = Number(req.params.id);
+
+      const league = await storage.getLeague(leagueId);
+      if (!league) {
+        return res.status(404).json({ message: "League not found" });
+      }
+
+      if (league.commissionerId !== userId) {
+        return res.status(403).json({ message: "Only commissioner can manage ESPN integration" });
+      }
+
+      const settings = league.settings || {};
+      if (!settings.espnLeagueId) {
+        return res.status(400).json({ message: "ESPN League ID not configured" });
+      }
+
+      const { fetchEspnTeams } = await import('./espn-api');
+      const seasonId = settings.espnSeasonId || new Date().getFullYear().toString();
+      const cookies = settings.espnPrivateLeague ? {
+        espnS2: settings.espnS2,
+        swid: settings.espnSwid
+      } : undefined;
+
+      const result = await fetchEspnTeams(settings.espnLeagueId, seasonId, cookies);
+      
+      if (!result.success) {
+        return res.status(400).json({ message: result.error });
+      }
+
+      res.json({ teams: result.teams });
+    } catch (err) {
+      console.error("Error fetching ESPN teams:", err);
+      res.status(500).json({ message: "Failed to fetch ESPN teams" });
+    }
+  });
+
+  // Update member's ESPN team mapping
+  app.patch("/api/leagues/:id/members/:memberId/espn-team", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const leagueId = Number(req.params.id);
+      const memberId = Number(req.params.memberId);
+      const { espnTeamId } = req.body;
+
+      const league = await storage.getLeague(leagueId);
+      if (!league) {
+        return res.status(404).json({ message: "League not found" });
+      }
+
+      if (league.commissionerId !== userId) {
+        return res.status(403).json({ message: "Only commissioner can update ESPN mappings" });
+      }
+
+      // Verify member belongs to this league
+      const member = league.members?.find((m: any) => m.id === memberId);
+      if (!member) {
+        return res.status(404).json({ message: "Member not found in this league" });
+      }
+
+      await storage.updateMemberEspnTeamId(memberId, espnTeamId);
+      res.json({ success: true });
+    } catch (err) {
+      console.error("Error updating ESPN team mapping:", err);
+      res.status(500).json({ message: "Failed to update ESPN team mapping" });
     }
   });
 
