@@ -205,12 +205,12 @@ export default function LeagueDetail() {
             </CardContent>
           </Card>
 
-          {/* Row: Message Board + League Info - same height */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
-            <div className="lg:col-span-2 flex">
+          {/* Row: Message Board + League Info */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+            <div className="lg:col-span-2">
               <MessageBoard leagueId={league.id} />
             </div>
-            <Card className="flex flex-col">
+            <Card>
               <CardHeader>
                 <CardTitle>League Info</CardTitle>
               </CardHeader>
@@ -255,9 +255,9 @@ export default function LeagueDetail() {
             </Card>
           </div>
 
-          {/* Row: Sports Scores + Budget Forecast - same height */}
-          <div className={`grid grid-cols-1 ${isCommissioner ? 'lg:grid-cols-3' : ''} gap-6 items-stretch`}>
-            <div className={`${isCommissioner ? 'lg:col-span-2' : ''} flex`}>
+          {/* Row: Sports Scores + Budget Forecast */}
+          <div className={`grid grid-cols-1 ${isCommissioner ? 'lg:grid-cols-3' : ''} gap-6 items-start`}>
+            <div className={isCommissioner ? 'lg:col-span-2' : ''}>
               <SportsScoresWidget />
             </div>
             {isCommissioner && <PayoutCalculatorCard league={league} />}
@@ -424,7 +424,7 @@ function PayoutCalculatorCard({ league }: { league: any }) {
   const isBalanced = balance >= 0;
   
   return (
-    <Card data-testid="card-payout-calculator" className="flex flex-col h-full">
+    <Card data-testid="card-payout-calculator">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Calculator className="w-5 h-5" />
@@ -432,7 +432,7 @@ function PayoutCalculatorCard({ league }: { league: any }) {
         </CardTitle>
         <CardDescription>Projected season income vs payouts</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4 flex-1">
+      <CardContent className="space-y-4">
         <div className="space-y-2 text-sm">
           <p className="font-medium text-foreground">Entry Fee Revenue</p>
           <div className="flex justify-between">
@@ -2080,7 +2080,7 @@ function MessageBoard({ leagueId }: { leagueId: number }) {
   const sortedMessages = messages ? [...messages].reverse() : [];
 
   return (
-    <Card className="w-full flex flex-col h-full">
+    <Card>
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2">
           <MessageSquare className="w-5 h-5" />
@@ -2088,8 +2088,8 @@ function MessageBoard({ leagueId }: { leagueId: number }) {
         </CardTitle>
         <CardDescription>Chat with your league members</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4 flex-1 flex flex-col">
-        <ScrollArea className="flex-1 min-h-[200px]">
+      <CardContent className="space-y-4">
+        <ScrollArea className="h-[200px]">
           {isLoading ? (
             <div className="space-y-3">
               {[1, 2, 3].map(i => (
@@ -2232,7 +2232,7 @@ function SportsScoresWidget() {
   };
 
   return (
-    <Card className="w-full flex flex-col h-full">
+    <Card>
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <CardTitle className="flex items-center gap-2 text-base">
@@ -2262,8 +2262,8 @@ function SportsScoresWidget() {
           <CardDescription>Week {data.week} - {data.season} Season</CardDescription>
         )}
       </CardHeader>
-      <CardContent className="flex-1 flex flex-col">
-        <ScrollArea className="flex-1 min-h-[150px]">
+      <CardContent>
+        <ScrollArea className="h-[150px]">
           {isLoading ? (
             <div className="space-y-2">
               {[1, 2, 3].map(i => (
