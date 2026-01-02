@@ -73,3 +73,13 @@ The `shared/` directory contains code used by both frontend and backend:
 ### Development Tools
 - **Vite Plugins**: Replit-specific plugins for cartographer, dev banner, and error overlay
 - **TypeScript**: Strict mode with path aliases (`@/` for client, `@shared/` for shared)
+
+## Automation Features
+
+### Weekly Score Sync Automation
+- **HPS (Highest Point Scorer)**: Automatically credits weekly prize to highest scorer's wallet after score sync
+- **LPS (Lowest Point Scorer)**: Automatically creates payment request for lowest scorer when LPS fee is enabled
+- **LPS Payment Page**: Public page at `/pay-lps/:token` allows members to pay their LPS fee
+
+### Pending Integrations
+- **Twilio SMS**: Not configured. User dismissed the integration setup. To enable SMS notifications for LPS payment requests, the user would need to set up Twilio. Currently, LPS payment links must be shared manually.
