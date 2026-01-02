@@ -11,6 +11,7 @@ import Landing from "@/pages/landing";
 import Dashboard from "@/pages/dashboard";
 import CreateLeague from "@/pages/create-league";
 import LeagueDetail from "@/pages/league-detail";
+import AdminDashboard from "@/pages/admin";
 import { Shell } from "@/components/layout-shell";
 
 function Router() {
@@ -40,6 +41,7 @@ function Router() {
         <Route path="/dashboard" component={Dashboard} />
         <Route path="/create-league" component={CreateLeague} />
         <Route path="/league/:id" component={LeagueDetail} />
+        <Route path="/admin" component={AdminDashboard} />
         <Route component={NotFound} />
       </Switch>
     </Shell>

@@ -14,6 +14,19 @@ import { authStorage } from "./replit_integrations/auth/storage";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
+  updateUserRole(id: string, role: string): Promise<void>;
+  isUserAdmin(id: string): Promise<boolean>;
+
+  // Admin methods
+  getAllLeagues(): Promise<League[]>;
+  getPlatformStats(): Promise<{
+    totalLeagues: number;
+    totalUsers: number;
+    totalPayments: number;
+    totalPayouts: number;
+    totalFundsCollected: string;
+    totalFundsPaidOut: string;
+  }>;
 
   createLeague(league: InsertLeague): Promise<League>;
   getLeague(id: number): Promise<LeagueWithMembers | undefined>;
@@ -38,6 +51,50 @@ export interface IStorage {
 export class DatabaseStorage implements IStorage {
   async getUser(id: string): Promise<User | undefined> {
     return authStorage.getUser(id);
+  }
+
+  async updateUserRole(id: string, role: string): Promise<void> {
+    await db.update(users).set({ role }).where(eq(users.id, id));
+  }
+
+  async isUserAdmin(id: string): Promise<boolean> {
+    const user = await this.getUser(id);
+    return user?.role === 'admin' || user?.role === 'super_admin';
+  }
+
+  async getAllLeagues(): Promise<League[]> {
+    return await db.select().from(leagues).orderBy(desc(leagues.createdAt));
+  }
+
+  async getPlatformStats(): Promise<{
+    totalLeagues: number;
+    totalUsers: number;
+    totalPayments: number;
+    totalPayouts: number;
+    totalFundsCollected: string;
+    totalFundsPaidOut: string;
+  }> {
+    const [leagueCount] = await db.select({ count: sql<number>`count(*)` }).from(leagues);
+    const [userCount] = await db.select({ count: sql<number>`count(*)` }).from(users);
+    const [paymentCount] = await db.select({ count: sql<number>`count(*)` }).from(payments);
+    const [payoutCount] = await db.select({ count: sql<number>`count(*)` }).from(payouts);
+    
+    const [fundsCollected] = await db.select({ 
+      total: sql<string>`COALESCE(SUM(amount), 0)` 
+    }).from(payments).where(eq(payments.status, 'completed'));
+    
+    const [fundsPaidOut] = await db.select({ 
+      total: sql<string>`COALESCE(SUM(amount), 0)` 
+    }).from(payouts).where(eq(payouts.status, 'paid'));
+
+    return {
+      totalLeagues: Number(leagueCount.count),
+      totalUsers: Number(userCount.count),
+      totalPayments: Number(paymentCount.count),
+      totalPayouts: Number(payoutCount.count),
+      totalFundsCollected: fundsCollected.total || "0",
+      totalFundsPaidOut: fundsPaidOut.total || "0"
+    };
   }
 
   async createLeague(league: InsertLeague): Promise<League> {

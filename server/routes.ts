@@ -316,6 +316,73 @@ export async function registerRoutes(
     }
   });
 
+  // === ADMIN ===
+  // Middleware to check admin status
+  const isAdmin = async (req: any, res: any, next: any) => {
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    const isAdminUser = await storage.isUserAdmin(req.user.claims.sub);
+    if (!isAdminUser) {
+      return res.status(403).json({ message: "Admin access required" });
+    }
+    next();
+  };
+
+  // Check if current user is admin
+  app.get("/api/admin/check", isAuthenticated, async (req: any, res) => {
+    try {
+      const isAdminUser = await storage.isUserAdmin(req.user.claims.sub);
+      res.json({ isAdmin: isAdminUser });
+    } catch (err) {
+      console.error("Error checking admin status:", err);
+      res.status(500).json({ message: "Failed to check admin status" });
+    }
+  });
+
+  // Get platform-wide stats
+  app.get("/api/admin/stats", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const stats = await storage.getPlatformStats();
+      res.json(stats);
+    } catch (err) {
+      console.error("Error fetching admin stats:", err);
+      res.status(500).json({ message: "Failed to fetch stats" });
+    }
+  });
+
+  // Get all leagues for admin
+  app.get("/api/admin/leagues", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const allLeagues = await storage.getAllLeagues();
+      res.json(allLeagues);
+    } catch (err) {
+      console.error("Error fetching all leagues:", err);
+      res.status(500).json({ message: "Failed to fetch leagues" });
+    }
+  });
+
+  // Make a user an admin (super_admin only - for initial setup, use database directly)
+  app.post("/api/admin/promote", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const currentUser = await storage.getUser(req.user.claims.sub);
+      if (currentUser?.role !== 'super_admin') {
+        return res.status(403).json({ message: "Only super admin can promote users" });
+      }
+      
+      const { userId, role } = req.body;
+      if (!['user', 'admin'].includes(role)) {
+        return res.status(400).json({ message: "Invalid role" });
+      }
+      
+      await storage.updateUserRole(userId, role);
+      res.json({ success: true });
+    } catch (err) {
+      console.error("Error promoting user:", err);
+      res.status(500).json({ message: "Failed to promote user" });
+    }
+  });
+
   // === STRIPE ===
   app.get("/api/stripe/key", async (req, res) => {
     try {
