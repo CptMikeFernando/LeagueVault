@@ -1113,12 +1113,16 @@ function LeagueSettingsForm({ league }: { league: any }) {
                   type="number" 
                   min="1"
                   max="21"
+                  step="1"
                   className="font-mono"
                   value={numberOfWeeks}
-                  onChange={(e) => setNumberOfWeeks(e.target.value)}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value) || 17;
+                    setNumberOfWeeks(String(Math.max(1, Math.min(21, val))));
+                  }}
                   data-testid="input-settings-number-of-weeks"
                 />
-                <p className="text-xs text-muted-foreground">Total weeks in the regular season (for HPS/LPS).</p>
+                <p className="text-xs text-muted-foreground">Regular season weeks (1-21). Default: 17.</p>
               </div>
             </div>
 
