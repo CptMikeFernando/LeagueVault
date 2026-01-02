@@ -56,6 +56,7 @@ export const leagueMembers = pgTable("league_members", {
   userId: text("user_id").notNull(),
   role: text("role").notNull().default("member"), // 'commissioner', 'member'
   teamName: text("team_name"),
+  ownerName: text("owner_name"), // Display name for the member
   externalTeamId: text("external_team_id"), // ESPN/Yahoo team ID for score syncing
   phoneNumber: text("phone_number"), // For SMS payment reminders
   paidStatus: text("paid_status").notNull().default("unpaid"), // 'paid', 'unpaid', 'partial'

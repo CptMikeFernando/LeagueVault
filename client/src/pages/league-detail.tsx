@@ -291,9 +291,9 @@ export default function LeagueDetail() {
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
                           <Avatar className="h-8 w-8">
-                             <AvatarFallback>{member.userId.substring(0,2).toUpperCase()}</AvatarFallback>
+                             <AvatarFallback>{(member.ownerName || member.user?.firstName || member.userId).substring(0,2).toUpperCase()}</AvatarFallback>
                           </Avatar>
-                          User {member.userId.slice(0,4)}...
+                          {member.ownerName || (member.user ? `${member.user.firstName || ''} ${member.user.lastName || ''}`.trim() : `User ${member.userId.slice(0,4)}...`)}
                         </div>
                       </TableCell>
                       <TableCell>{member.teamName}</TableCell>

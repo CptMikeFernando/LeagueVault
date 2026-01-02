@@ -1488,7 +1488,8 @@ export async function registerRoutes(
         leagueId,
         userId: placeholderUserId,
         role: 'member',
-        teamName: teamName || ownerName || 'Pending Member',
+        teamName: teamName || 'Pending Team',
+        ownerName: ownerName || 'Pending Member',
         phoneNumber: contactType === 'phone' ? contactValue : null,
         paidStatus: 'unpaid'
       });
