@@ -207,15 +207,15 @@ export default function LeagueDetail() {
           </Card>
 
           {/* Row: Message Board + League Info */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-end">
-            <div className="lg:col-span-2">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
+            <div className="lg:col-span-2 h-full">
               <MessageBoard leagueId={league.id} />
             </div>
-            <Card>
+            <Card className="h-full flex flex-col">
               <CardHeader>
                 <CardTitle>League Info</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-4 flex-1">
                 <div className="flex justify-between text-sm pb-2 border-b">
                   <span className="text-muted-foreground">Members</span>
                   <span className="font-mono font-medium" data-testid="text-member-count">{league.members?.length || 0} teams</span>
@@ -2110,7 +2110,7 @@ function MessageBoard({ leagueId }: { leagueId: number }) {
 
 
   return (
-    <Card>
+    <Card className="h-full flex flex-col">
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2">
           <MessageSquare className="w-5 h-5" />
@@ -2118,8 +2118,8 @@ function MessageBoard({ leagueId }: { leagueId: number }) {
         </CardTitle>
         <CardDescription>Chat with your league members</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <ScrollArea className="h-[200px]">
+      <CardContent className="space-y-4 flex-1 flex flex-col">
+        <ScrollArea className="flex-1 min-h-[200px]">
           {isLoading ? (
             <div className="space-y-3">
               {[1, 2, 3].map(i => (
