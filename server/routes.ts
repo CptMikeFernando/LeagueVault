@@ -1319,5 +1319,63 @@ export async function registerRoutes(
     }
   });
 
+  // === LEAGUE MESSAGES (Message Board) ===
+  app.get("/api/leagues/:id/messages", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const leagueId = Number(req.params.id);
+
+      const league = await storage.getLeague(leagueId);
+      if (!league) {
+        return res.status(404).json({ message: "League not found" });
+      }
+
+      // Check if user is a member of the league
+      const member = await storage.getLeagueMember(leagueId, userId);
+      if (!member && league.commissionerId !== userId) {
+        return res.status(403).json({ message: "You must be a member of this league" });
+      }
+
+      const messages = await storage.getLeagueMessages(leagueId, 50);
+      res.json(messages);
+    } catch (err) {
+      console.error("Error fetching messages:", err);
+      res.status(500).json({ message: "Failed to fetch messages" });
+    }
+  });
+
+  app.post("/api/leagues/:id/messages", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const leagueId = Number(req.params.id);
+      const { content } = req.body;
+
+      if (!content || content.trim().length === 0) {
+        return res.status(400).json({ message: "Message content is required" });
+      }
+
+      if (content.length > 1000) {
+        return res.status(400).json({ message: "Message is too long (max 1000 characters)" });
+      }
+
+      const league = await storage.getLeague(leagueId);
+      if (!league) {
+        return res.status(404).json({ message: "League not found" });
+      }
+
+      // Check if user is a member of the league
+      const member = await storage.getLeagueMember(leagueId, userId);
+      if (!member && league.commissionerId !== userId) {
+        return res.status(403).json({ message: "You must be a member of this league to post messages" });
+      }
+
+      const message = await storage.createLeagueMessage(leagueId, userId, content.trim());
+      res.status(201).json(message);
+    } catch (err) {
+      console.error("Error posting message:", err);
+      res.status(500).json({ message: "Failed to post message" });
+    }
+  });
+
   return httpServer;
 }

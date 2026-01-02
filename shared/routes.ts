@@ -116,6 +116,43 @@ export const api = {
         403: errorSchemas.unauthorized,
         404: errorSchemas.notFound,
       }
+    },
+    messages: {
+      method: 'GET' as const,
+      path: '/api/leagues/:id/messages',
+      responses: {
+        200: z.array(z.object({
+          id: z.number(),
+          leagueId: z.number(),
+          userId: z.string(),
+          content: z.string(),
+          createdAt: z.string().nullable(),
+          user: z.object({
+            id: z.string(),
+            firstName: z.string().nullable(),
+            lastName: z.string().nullable(),
+            profileImageUrl: z.string().nullable(),
+          }).nullable().optional()
+        })),
+        404: errorSchemas.notFound,
+      }
+    },
+    postMessage: {
+      method: 'POST' as const,
+      path: '/api/leagues/:id/messages',
+      input: z.object({ content: z.string().min(1).max(1000) }),
+      responses: {
+        201: z.object({
+          id: z.number(),
+          leagueId: z.number(),
+          userId: z.string(),
+          content: z.string(),
+          createdAt: z.string().nullable()
+        }),
+        400: errorSchemas.validation,
+        403: errorSchemas.unauthorized,
+        404: errorSchemas.notFound,
+      }
     }
   },
   payments: {

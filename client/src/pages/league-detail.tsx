@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StatCard } from "@/components/stat-card";
@@ -42,7 +43,8 @@ import {
   MessageSquare,
   Link2,
   Calculator,
-  Trash2
+  Trash2,
+  Send
 } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useState } from "react";
@@ -206,31 +208,7 @@ export default function LeagueDetail() {
                 </CardContent>
               </Card>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>League Activity</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {league.payments && league.payments.slice(0, 5).map((payment: any, i: number) => (
-                      <div key={i} className="flex items-center justify-between text-sm">
-                        <div className="flex items-center gap-3">
-                          <Avatar className="h-8 w-8">
-                            <AvatarFallback>{payment.userId.substring(0,2).toUpperCase()}</AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <p className="font-medium">Payment Received</p>
-                            <p className="text-muted-foreground text-xs">{format(new Date(payment.createdAt), 'MMM d, yyyy')}</p>
-                          </div>
-                        </div>
-                        <span className="font-mono font-medium text-green-600">
-                          +${Number(payment.amount).toFixed(2)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
+              <MessageBoard leagueId={league.id} />
             </div>
 
             <div className="space-y-6">
@@ -1712,6 +1690,135 @@ function DeleteLeagueSection({ league }: { league: any }) {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+      </CardContent>
+    </Card>
+  );
+}
+
+function MessageBoard({ leagueId }: { leagueId: number }) {
+  const { toast } = useToast();
+  const [newMessage, setNewMessage] = useState("");
+
+  const { data: messages, isLoading } = useQuery({
+    queryKey: ['/api/leagues', leagueId, 'messages'],
+    queryFn: async () => {
+      const res = await fetch(`/api/leagues/${leagueId}/messages`, { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to fetch messages');
+      return res.json();
+    },
+    refetchInterval: 30000,
+  });
+
+  const postMessage = useMutation({
+    mutationFn: async (content: string) => {
+      const res = await fetch(`/api/leagues/${leagueId}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content }),
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.message || 'Failed to post message');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      setNewMessage("");
+      queryClient.invalidateQueries({ queryKey: ['/api/leagues', leagueId, 'messages'] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newMessage.trim()) {
+      postMessage.mutate(newMessage.trim());
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2">
+          <MessageSquare className="w-5 h-5" />
+          Message Board
+        </CardTitle>
+        <CardDescription>Chat with your league members</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <form onSubmit={handleSubmit} className="flex gap-2">
+          <Textarea
+            placeholder="Write a message..."
+            value={newMessage}
+            onChange={(e) => setNewMessage(e.target.value)}
+            className="min-h-[60px] resize-none flex-1"
+            data-testid="input-message"
+          />
+          <Button 
+            type="submit" 
+            size="icon" 
+            disabled={!newMessage.trim() || postMessage.isPending}
+            data-testid="button-send-message"
+          >
+            <Send className="w-4 h-4" />
+          </Button>
+        </form>
+
+        <Separator />
+
+        <ScrollArea className="h-[250px]">
+          {isLoading ? (
+            <div className="space-y-3">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="flex gap-3">
+                  <Skeleton className="h-8 w-8 rounded-full" />
+                  <div className="flex-1 space-y-1">
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-4 w-full" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : messages?.length === 0 ? (
+            <p className="text-center text-muted-foreground text-sm py-8">
+              No messages yet. Be the first to post!
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {messages?.map((msg: any) => (
+                <div key={msg.id} className="flex gap-3" data-testid={`message-${msg.id}`}>
+                  <Avatar className="h-8 w-8">
+                    <AvatarFallback>
+                      {msg.user?.firstName?.[0] || msg.userId.substring(0, 2).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-baseline gap-2 flex-wrap">
+                      <span className="font-medium text-sm">
+                        {msg.user?.firstName && msg.user?.lastName 
+                          ? `${msg.user.firstName} ${msg.user.lastName}`
+                          : 'Member'}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {msg.createdAt ? format(new Date(msg.createdAt), 'MMM d, h:mm a') : ''}
+                      </span>
+                    </div>
+                    <p className="text-sm text-muted-foreground break-words">
+                      {msg.content}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </ScrollArea>
       </CardContent>
     </Card>
   );

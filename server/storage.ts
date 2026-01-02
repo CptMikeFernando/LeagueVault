@@ -1,7 +1,7 @@
 import { db } from "./db";
 import { 
   users, leagues, leagueMembers, payments, payouts, weeklyScores, platformFees,
-  memberWallets, walletTransactions, withdrawalRequests, lpsPaymentRequests, paymentReminders,
+  memberWallets, walletTransactions, withdrawalRequests, lpsPaymentRequests, paymentReminders, leagueMessages,
   type User,
   type League, type InsertLeague,
   type LeagueMember, type InsertLeagueMember,
@@ -14,6 +14,7 @@ import {
   type WithdrawalRequest, type InsertWithdrawalRequest,
   type LpsPaymentRequest, type InsertLpsPaymentRequest,
   type PaymentReminder, type InsertPaymentReminder,
+  type LeagueMessage,
   type LeagueWithMembers
 } from "@shared/schema";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
@@ -97,6 +98,10 @@ export interface IStorage {
 
   // Delete league (commissioner only)
   deleteLeague(leagueId: number): Promise<void>;
+
+  // League messages (message board)
+  createLeagueMessage(leagueId: number, userId: string, content: string): Promise<LeagueMessage>;
+  getLeagueMessages(leagueId: number, limit?: number): Promise<(LeagueMessage & { user?: User })[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -567,6 +572,10 @@ export class DatabaseStorage implements IStorage {
     await db.delete(paymentReminders)
       .where(eq(paymentReminders.leagueId, leagueId));
     
+    // Delete league messages
+    await db.delete(leagueMessages)
+      .where(eq(leagueMessages.leagueId, leagueId));
+    
     // Delete weekly scores
     await db.delete(weeklyScores)
       .where(eq(weeklyScores.leagueId, leagueId));
@@ -590,6 +599,30 @@ export class DatabaseStorage implements IStorage {
     // Finally delete the league itself
     await db.delete(leagues)
       .where(eq(leagues.id, leagueId));
+  }
+
+  async createLeagueMessage(leagueId: number, userId: string, content: string): Promise<LeagueMessage> {
+    const [message] = await db.insert(leagueMessages)
+      .values({ leagueId, userId, content })
+      .returning();
+    return message;
+  }
+
+  async getLeagueMessages(leagueId: number, limit: number = 50): Promise<(LeagueMessage & { user?: User })[]> {
+    const results = await db.select({
+      message: leagueMessages,
+      user: users
+    })
+      .from(leagueMessages)
+      .leftJoin(users, eq(leagueMessages.userId, users.id))
+      .where(eq(leagueMessages.leagueId, leagueId))
+      .orderBy(desc(leagueMessages.createdAt))
+      .limit(limit);
+    
+    return results.map(row => ({
+      ...row.message,
+      user: row.user || undefined
+    }));
   }
 }
 
