@@ -151,6 +151,14 @@ export const api = {
           totalInflow: z.string(),
           totalOutflow: z.string(),
           availableBalance: z.string(),
+          memberWallets: z.array(z.object({
+            id: z.number(),
+            userId: z.string(),
+            availableBalance: z.string(),
+            totalEarnings: z.string(),
+            totalWithdrawn: z.string(),
+          })),
+          leagueName: z.string(),
         }),
       }
     },

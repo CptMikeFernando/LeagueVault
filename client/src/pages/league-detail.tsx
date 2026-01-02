@@ -32,10 +32,14 @@ import {
   Settings,
   CreditCard,
   Plus,
-  AlertCircle
+  AlertCircle,
+  Building,
+  TrendingUp,
+  TrendingDown
 } from "lucide-react";
 import { useState } from "react";
 import { format } from "date-fns";
+import { useQuery } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function LeagueDetail() {
@@ -126,7 +130,10 @@ export default function LeagueDetail() {
           <TabsTrigger value="members" className="data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-0 py-3 bg-transparent font-medium">Members</TabsTrigger>
           <TabsTrigger value="finances" className="data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-0 py-3 bg-transparent font-medium">Finances</TabsTrigger>
           {isCommissioner && (
-            <TabsTrigger value="tools" className="data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-0 py-3 bg-transparent font-medium">Commish Tools</TabsTrigger>
+            <>
+              <TabsTrigger value="treasury" className="data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-0 py-3 bg-transparent font-medium" data-testid="tab-treasury">Treasury</TabsTrigger>
+              <TabsTrigger value="tools" className="data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-0 py-3 bg-transparent font-medium">Commish Tools</TabsTrigger>
+            </>
           )}
         </TabsList>
 
@@ -257,6 +264,12 @@ export default function LeagueDetail() {
         <TabsContent value="finances">
           <FinancesTab league={league} />
         </TabsContent>
+
+        {isCommissioner && (
+          <TabsContent value="treasury">
+            <TreasuryTab leagueId={leagueId} />
+          </TabsContent>
+        )}
 
         {isCommissioner && (
           <TabsContent value="tools">
@@ -566,6 +579,143 @@ function FinancesTab({ league }: { league: any }) {
                </div>
              )}
           </ScrollArea>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+interface TreasuryData {
+  totalInflow: string;
+  totalOutflow: string;
+  availableBalance: string;
+  memberWallets: Array<{
+    id: number;
+    userId: string;
+    availableBalance: string;
+    totalEarnings: string;
+    totalWithdrawn: string;
+  }>;
+  leagueName: string;
+}
+
+function TreasuryTab({ leagueId }: { leagueId: number }) {
+  const { data: treasury, isLoading } = useQuery<TreasuryData>({
+    queryKey: ['/api/leagues', leagueId, 'treasury'],
+    queryFn: async () => {
+      const res = await fetch(`/api/leagues/${leagueId}/treasury`, { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to fetch treasury');
+      return res.json();
+    }
+  });
+
+  if (isLoading) return <Skeleton className="h-48 w-full" />;
+
+  if (!treasury) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center">
+          <Building className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+          <p className="text-muted-foreground">Unable to load treasury data</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const totalInflow = Number(treasury.totalInflow || 0);
+  const totalOutflow = Number(treasury.totalOutflow || 0);
+  const availableBalance = Number(treasury.availableBalance || 0);
+  const memberWallets = treasury.memberWallets || [];
+  const totalWalletBalances = memberWallets.reduce((sum, w) => sum + Number(w.availableBalance || 0), 0);
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card data-testid="card-treasury-balance">
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">League Treasury</CardTitle>
+            <Building className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold" data-testid="text-treasury-balance">${availableBalance.toFixed(2)}</div>
+            <p className="text-xs text-muted-foreground">Available for payouts</p>
+          </CardContent>
+        </Card>
+
+        <Card data-testid="card-treasury-inflow">
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Collected</CardTitle>
+            <TrendingUp className="h-4 w-4 text-green-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600" data-testid="text-treasury-inflow">${totalInflow.toFixed(2)}</div>
+            <p className="text-xs text-muted-foreground">Dues received</p>
+          </CardContent>
+        </Card>
+
+        <Card data-testid="card-treasury-outflow">
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Paid Out</CardTitle>
+            <TrendingDown className="h-4 w-4 text-red-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-600" data-testid="text-treasury-outflow">${totalOutflow.toFixed(2)}</div>
+            <p className="text-xs text-muted-foreground">Payouts issued</p>
+          </CardContent>
+        </Card>
+
+        <Card data-testid="card-member-balances">
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Member Wallets</CardTitle>
+            <Wallet className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold" data-testid="text-member-balances">${totalWalletBalances.toFixed(2)}</div>
+            <p className="text-xs text-muted-foreground">Held in member wallets</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Member Wallet Balances</CardTitle>
+          <CardDescription>Overview of all member wallets in this league</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {memberWallets.length === 0 ? (
+            <div className="text-center py-8">
+              <Wallet className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <p className="text-muted-foreground">No member wallets yet. Issue payouts to create wallets.</p>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Member</TableHead>
+                  <TableHead className="text-right">Available</TableHead>
+                  <TableHead className="text-right">Total Earned</TableHead>
+                  <TableHead className="text-right">Total Withdrawn</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {memberWallets.map((wallet) => (
+                  <TableRow key={wallet.id} data-testid={`row-wallet-${wallet.id}`}>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2">
+                        <Avatar className="h-8 w-8">
+                          <AvatarFallback>{wallet.userId.substring(0, 2).toUpperCase()}</AvatarFallback>
+                        </Avatar>
+                        User {wallet.userId.slice(0, 4)}...
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-green-600">${Number(wallet.availableBalance).toFixed(2)}</TableCell>
+                    <TableCell className="text-right font-mono">${Number(wallet.totalEarnings).toFixed(2)}</TableCell>
+                    <TableCell className="text-right font-mono text-muted-foreground">${Number(wallet.totalWithdrawn).toFixed(2)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
     </div>
