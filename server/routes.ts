@@ -1414,5 +1414,71 @@ export async function registerRoutes(
     }
   });
 
+  // === SPORTS SCORES (ESPN unofficial API) ===
+  app.get("/api/sports/scores", async (req, res) => {
+    try {
+      const sport = req.query.sport as string || 'nfl';
+      
+      let url: string;
+      if (sport === 'cfb') {
+        url = 'http://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard?groups=80&limit=50';
+      } else {
+        url = 'http://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard';
+      }
+      
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`ESPN API returned ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      const games = (data.events || []).map((event: any) => {
+        const competition = event.competitions?.[0];
+        const competitors = competition?.competitors || [];
+        const homeTeam = competitors.find((c: any) => c.homeAway === 'home');
+        const awayTeam = competitors.find((c: any) => c.homeAway === 'away');
+        
+        return {
+          id: event.id,
+          name: event.name,
+          shortName: event.shortName,
+          date: event.date,
+          status: {
+            type: competition?.status?.type?.name,
+            displayClock: competition?.status?.displayClock,
+            period: competition?.status?.period
+          },
+          homeTeam: homeTeam ? {
+            id: homeTeam.team?.id,
+            name: homeTeam.team?.displayName,
+            abbreviation: homeTeam.team?.abbreviation,
+            logo: homeTeam.team?.logo,
+            score: homeTeam.score,
+            winner: homeTeam.winner
+          } : null,
+          awayTeam: awayTeam ? {
+            id: awayTeam.team?.id,
+            name: awayTeam.team?.displayName,
+            abbreviation: awayTeam.team?.abbreviation,
+            logo: awayTeam.team?.logo,
+            score: awayTeam.score,
+            winner: awayTeam.winner
+          } : null
+        };
+      });
+      
+      res.json({ 
+        sport,
+        week: data.week?.number,
+        season: data.season?.year,
+        games 
+      });
+    } catch (err) {
+      console.error("Error fetching sports scores:", err);
+      res.status(500).json({ message: "Failed to fetch scores", games: [] });
+    }
+  });
+
   return httpServer;
 }

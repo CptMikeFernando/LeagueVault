@@ -173,7 +173,7 @@ export default function LeagueDetail() {
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 flex flex-col gap-6">
               <Card>
                 <CardHeader>
@@ -204,6 +204,8 @@ export default function LeagueDetail() {
               </Card>
 
               <MessageBoard leagueId={league.id} />
+              
+              <SportsScoresWidget />
             </div>
 
             <div className="flex flex-col gap-6">
@@ -1862,6 +1864,146 @@ function MessageBoard({ leagueId }: { leagueId: number }) {
             <Send className="w-4 h-4" />
           </Button>
         </form>
+      </CardContent>
+    </Card>
+  );
+}
+
+interface SportsGame {
+  id: string;
+  name: string;
+  shortName: string;
+  date: string;
+  status: {
+    type: string;
+    displayClock?: string;
+    period?: number;
+  };
+  homeTeam: {
+    id: string;
+    name: string;
+    abbreviation: string;
+    logo: string;
+    score: string;
+    winner: boolean;
+  } | null;
+  awayTeam: {
+    id: string;
+    name: string;
+    abbreviation: string;
+    logo: string;
+    score: string;
+    winner: boolean;
+  } | null;
+}
+
+function SportsScoresWidget() {
+  const [sport, setSport] = useState<'nfl' | 'cfb'>('nfl');
+  
+  const { data, isLoading } = useQuery<{ sport: string; week: number; season: number; games: SportsGame[] }>({
+    queryKey: ['/api/sports/scores', sport],
+    queryFn: async () => {
+      const response = await fetch(`/api/sports/scores?sport=${sport}`);
+      if (!response.ok) throw new Error('Failed to fetch scores');
+      return response.json();
+    },
+    refetchInterval: 60000,
+  });
+
+  const formatGameTime = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) + 
+           ' ' + date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  };
+
+  const getStatusDisplay = (game: SportsGame) => {
+    if (game.status.type === 'STATUS_FINAL') return 'Final';
+    if (game.status.type === 'STATUS_IN_PROGRESS') {
+      return `${game.status.displayClock || ''} Q${game.status.period || ''}`;
+    }
+    if (game.status.type === 'STATUS_SCHEDULED') {
+      return formatGameTime(game.date);
+    }
+    return game.status.type?.replace('STATUS_', '') || '';
+  };
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Trophy className="w-4 h-4" />
+            Live Scores
+          </CardTitle>
+          <div className="flex gap-1">
+            <Button
+              size="sm"
+              variant={sport === 'nfl' ? 'default' : 'ghost'}
+              onClick={() => setSport('nfl')}
+              data-testid="button-nfl-scores"
+            >
+              NFL
+            </Button>
+            <Button
+              size="sm"
+              variant={sport === 'cfb' ? 'default' : 'ghost'}
+              onClick={() => setSport('cfb')}
+              data-testid="button-cfb-scores"
+            >
+              CFB
+            </Button>
+          </div>
+        </div>
+        {data?.week && (
+          <CardDescription>Week {data.week} - {data.season} Season</CardDescription>
+        )}
+      </CardHeader>
+      <CardContent>
+        <ScrollArea className="h-[200px]">
+          {isLoading ? (
+            <div className="space-y-2">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="h-12 bg-muted animate-pulse rounded" />
+              ))}
+            </div>
+          ) : !data?.games?.length ? (
+            <p className="text-sm text-muted-foreground text-center py-4">No games scheduled</p>
+          ) : (
+            <div className="space-y-2">
+              {data.games.slice(0, 10).map((game) => (
+                <div
+                  key={game.id}
+                  className="flex items-center justify-between p-2 bg-muted/30 rounded-md text-sm"
+                  data-testid={`game-${game.id}`}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      {game.awayTeam?.logo && (
+                        <img src={game.awayTeam.logo} alt="" className="w-4 h-4 object-contain" />
+                      )}
+                      <span className={game.awayTeam?.winner ? 'font-semibold' : ''}>
+                        {game.awayTeam?.abbreviation || 'TBD'}
+                      </span>
+                      <span className="font-mono">{game.awayTeam?.score || '-'}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {game.homeTeam?.logo && (
+                        <img src={game.homeTeam.logo} alt="" className="w-4 h-4 object-contain" />
+                      )}
+                      <span className={game.homeTeam?.winner ? 'font-semibold' : ''}>
+                        {game.homeTeam?.abbreviation || 'TBD'}
+                      </span>
+                      <span className="font-mono">{game.homeTeam?.score || '-'}</span>
+                    </div>
+                  </div>
+                  <Badge variant="outline" className="text-xs shrink-0 ml-2">
+                    {getStatusDisplay(game)}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          )}
+        </ScrollArea>
       </CardContent>
     </Card>
   );
