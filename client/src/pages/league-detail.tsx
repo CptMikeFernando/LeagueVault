@@ -344,6 +344,11 @@ function IssuePayoutForm({ league }: { league: any }) {
   const [recipientId, setRecipientId] = useState("");
   const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("other");
+  const [payoutType, setPayoutType] = useState<'standard' | 'instant'>('standard');
+
+  const INSTANT_FEE_PERCENT = 2.5;
+  const feeAmount = payoutType === 'instant' && amount ? (Number(amount) * INSTANT_FEE_PERCENT / 100).toFixed(2) : "0.00";
+  const netAmount = payoutType === 'instant' && amount ? (Number(amount) - Number(feeAmount)).toFixed(2) : amount;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -352,11 +357,12 @@ function IssuePayoutForm({ league }: { league: any }) {
       userId: recipientId,
       amount: Number(amount),
       reason,
-      status: "approved" // Auto approve for mock
+      payoutType
     }, {
       onSuccess: () => {
         setAmount("");
         setRecipientId("");
+        setPayoutType('standard');
       }
     });
   };
@@ -366,7 +372,7 @@ function IssuePayoutForm({ league }: { league: any }) {
        <div className="space-y-2">
          <Label>Recipient</Label>
          <Select onValueChange={setRecipientId} value={recipientId}>
-           <SelectTrigger>
+           <SelectTrigger data-testid="select-payout-recipient">
              <SelectValue placeholder="Select member" />
            </SelectTrigger>
            <SelectContent>
@@ -386,13 +392,14 @@ function IssuePayoutForm({ league }: { league: any }) {
               value={amount} 
               onChange={e => setAmount(e.target.value)} 
               required
+              data-testid="input-payout-amount"
             />
          </div>
        </div>
        <div className="space-y-2">
          <Label>Reason</Label>
          <Select onValueChange={setReason} value={reason}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectTrigger data-testid="select-payout-reason"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="weekly_high_score">Weekly High Score</SelectItem>
               <SelectItem value="championship">Championship Prize</SelectItem>
@@ -401,8 +408,52 @@ function IssuePayoutForm({ league }: { league: any }) {
             </SelectContent>
          </Select>
        </div>
-       <Button type="submit" className="w-full" disabled={createPayout.isPending}>
-         {createPayout.isPending ? "Issuing..." : "Issue Payout"}
+       <div className="space-y-3">
+         <Label>Payout Speed</Label>
+         <div className="grid grid-cols-2 gap-3">
+           <div 
+             className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${payoutType === 'standard' ? 'border-primary bg-primary/5' : 'border-border hover:border-muted-foreground'}`}
+             onClick={() => setPayoutType('standard')}
+             data-testid="option-standard-payout"
+           >
+             <div className="flex items-center justify-between mb-2">
+               <span className="font-medium">Standard</span>
+               <Badge variant="secondary">Free</Badge>
+             </div>
+             <p className="text-sm text-muted-foreground">3-5 business days</p>
+           </div>
+           <div 
+             className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${payoutType === 'instant' ? 'border-primary bg-primary/5' : 'border-border hover:border-muted-foreground'}`}
+             onClick={() => setPayoutType('instant')}
+             data-testid="option-instant-payout"
+           >
+             <div className="flex items-center justify-between mb-2">
+               <span className="font-medium">Instant</span>
+               <Badge variant="outline">{INSTANT_FEE_PERCENT}% fee</Badge>
+             </div>
+             <p className="text-sm text-muted-foreground">Within minutes</p>
+           </div>
+         </div>
+       </div>
+       {payoutType === 'instant' && amount && Number(amount) > 0 && (
+         <div className="bg-muted/50 p-3 rounded-lg space-y-2 text-sm">
+           <div className="flex justify-between">
+             <span className="text-muted-foreground">Payout Amount</span>
+             <span>${amount}</span>
+           </div>
+           <div className="flex justify-between text-destructive">
+             <span>Instant Fee ({INSTANT_FEE_PERCENT}%)</span>
+             <span>-${feeAmount}</span>
+           </div>
+           <Separator />
+           <div className="flex justify-between font-medium">
+             <span>Recipient Receives</span>
+             <span>${netAmount}</span>
+           </div>
+         </div>
+       )}
+       <Button type="submit" className="w-full" disabled={createPayout.isPending} data-testid="button-issue-payout">
+         {createPayout.isPending ? "Issuing..." : payoutType === 'instant' ? `Issue Instant Payout ($${feeAmount} fee)` : "Issue Payout"}
        </Button>
     </form>
   );

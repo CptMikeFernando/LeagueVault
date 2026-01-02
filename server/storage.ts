@@ -1,12 +1,13 @@
 import { db } from "./db";
 import { 
-  users, leagues, leagueMembers, payments, payouts, weeklyScores,
+  users, leagues, leagueMembers, payments, payouts, weeklyScores, platformFees,
   type User,
   type League, type InsertLeague,
   type LeagueMember, type InsertLeagueMember,
   type Payment, type InsertPayment,
   type Payout, type InsertPayout,
   type WeeklyScore, type InsertWeeklyScore,
+  type PlatformFee, type InsertPlatformFee,
   type LeagueWithMembers
 } from "@shared/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
@@ -46,6 +47,11 @@ export interface IStorage {
   getWeeklyScores(leagueId: number, week: number): Promise<WeeklyScore[]>;
   getHighestScorerForWeek(leagueId: number, week: number): Promise<WeeklyScore | undefined>;
   getLowestScorerForWeek(leagueId: number, week: number): Promise<WeeklyScore | undefined>;
+
+  // Platform fees
+  createPlatformFee(fee: InsertPlatformFee): Promise<PlatformFee>;
+  updatePlatformFeeStatus(id: number, status: string, stripeTransferId?: string): Promise<void>;
+  getTotalPlatformFees(): Promise<string>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -165,14 +171,16 @@ export class DatabaseStorage implements IStorage {
     return newPayment;
   }
 
-  async createPayout(payout: InsertPayout & { status: string }): Promise<Payout> {
+  async createPayout(payout: InsertPayout & { status: string; feeAmount?: string }): Promise<Payout> {
     const [newPayout] = await db.insert(payouts).values({
       leagueId: payout.leagueId,
       userId: payout.userId,
       amount: payout.amount,
       reason: payout.reason,
       week: payout.week,
-      status: payout.status
+      status: payout.status,
+      payoutType: payout.payoutType || 'standard',
+      feeAmount: payout.feeAmount || "0"
     }).returning();
     return newPayout;
   }
@@ -207,6 +215,31 @@ export class DatabaseStorage implements IStorage {
   async getLowestScorerForWeek(leagueId: number, week: number): Promise<WeeklyScore | undefined> {
     const scores = await this.getWeeklyScores(leagueId, week);
     return scores.length > 0 ? scores[scores.length - 1] : undefined;
+  }
+
+  // Platform fee methods
+  async createPlatformFee(fee: InsertPlatformFee): Promise<PlatformFee> {
+    const [newFee] = await db.insert(platformFees).values({
+      payoutId: fee.payoutId,
+      leagueId: fee.leagueId,
+      amount: fee.amount,
+      feeType: fee.feeType || 'instant_payout'
+    }).returning();
+    return newFee;
+  }
+
+  async updatePlatformFeeStatus(id: number, status: string, stripeTransferId?: string): Promise<void> {
+    await db.update(platformFees).set({ 
+      status, 
+      stripeTransferId: stripeTransferId || null 
+    }).where(eq(platformFees.id, id));
+  }
+
+  async getTotalPlatformFees(): Promise<string> {
+    const [result] = await db.select({ 
+      total: sql<string>`COALESCE(SUM(amount), 0)` 
+    }).from(platformFees).where(eq(platformFees.status, 'transferred'));
+    return result.total || "0";
   }
 
   // Stripe-related storage methods

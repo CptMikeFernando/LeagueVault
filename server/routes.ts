@@ -197,10 +197,13 @@ export async function registerRoutes(
   });
 
   // === PAYOUTS ===
+  // Instant payout fee percentage (e.g., 2.5% for instant payouts)
+  const INSTANT_PAYOUT_FEE_PERCENT = 2.5;
+
   app.post(api.payouts.create.path, isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      const { leagueId, userId: recipientId, amount, reason, week } = req.body;
+      const { leagueId, userId: recipientId, amount, reason, week, payoutType = 'standard' } = req.body;
       
       // Authorization check (only commissioner)
       const league = await storage.getLeague(Number(leagueId));
@@ -212,16 +215,46 @@ export async function registerRoutes(
         return res.status(403).json({ message: "Only commissioner can issue payouts" });
       }
 
+      // Calculate fee for instant payouts
+      let feeAmount = "0";
+      let netAmount = String(amount);
+      
+      if (payoutType === 'instant') {
+        const fee = (Number(amount) * INSTANT_PAYOUT_FEE_PERCENT / 100);
+        feeAmount = fee.toFixed(2);
+        netAmount = (Number(amount) - fee).toFixed(2);
+      }
+
       const payout = await storage.createPayout({
         leagueId: Number(leagueId),
         userId: recipientId,
-        amount: String(amount),
+        amount: netAmount,
         reason,
         week: week || null,
-        status: 'approved'
+        status: payoutType === 'instant' ? 'paid' : 'approved',
+        payoutType,
+        feeAmount
       });
+
+      // If instant payout with fee, record the platform fee
+      if (payoutType === 'instant' && Number(feeAmount) > 0) {
+        const platformFee = await storage.createPlatformFee({
+          payoutId: payout.id,
+          leagueId: Number(leagueId),
+          amount: feeAmount,
+          feeType: 'instant_payout'
+        });
+
+        // In production, this would trigger a Stripe transfer to the business account
+        // For now, mark as transferred (simulated)
+        await storage.updatePlatformFeeStatus(platformFee.id, 'transferred');
+      }
       
-      res.status(201).json(payout);
+      res.status(201).json({ 
+        ...payout, 
+        feeCharged: feeAmount,
+        estimatedArrival: payoutType === 'instant' ? 'Immediate' : '3-5 business days'
+      });
     } catch (err) {
       console.error("Error creating payout:", err);
       res.status(500).json({ message: "Failed to create payout" });

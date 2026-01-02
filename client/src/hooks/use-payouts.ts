@@ -1,14 +1,22 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@shared/routes";
-import type { InsertPayout } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
+
+type CreatePayoutData = {
+  leagueId: number;
+  userId: string;
+  amount: number;
+  reason: string;
+  week?: number | null;
+  payoutType?: 'standard' | 'instant';
+};
 
 export function useCreatePayout() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async (data: InsertPayout) => {
+    mutationFn: async (data: CreatePayoutData) => {
       const res = await fetch(api.payouts.create.path, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -17,13 +25,16 @@ export function useCreatePayout() {
       });
 
       if (!res.ok) throw new Error("Failed to issue payout");
-      return api.payouts.create.responses[201].parse(await res.json());
+      return res.json();
     },
-    onSuccess: (_, variables) => {
+    onSuccess: (response, variables) => {
       queryClient.invalidateQueries({ queryKey: [api.payments.history.path, variables.leagueId] });
+      const isInstant = variables.payoutType === 'instant';
       toast({
-        title: "Payout Issued",
-        description: "Funds have been released to the member.",
+        title: isInstant ? "Instant Payout Issued" : "Payout Issued",
+        description: isInstant 
+          ? `Funds sent instantly. Fee: $${response.feeCharged || '0'}`
+          : "Funds will arrive in 3-5 business days.",
       });
     },
     onError: (error: Error) => {

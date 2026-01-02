@@ -89,8 +89,33 @@ export const payouts = pgTable("payouts", {
   reason: text("reason").notNull(), // 'weekly_high_score', 'championship', 'other'
   week: integer("week"), // Optional, for weekly payouts
   status: text("status").notNull().default("pending"), // 'pending', 'approved', 'paid'
+  payoutType: text("payout_type").notNull().default("standard"), // 'instant', 'standard'
+  feeAmount: decimal("fee_amount", { precision: 10, scale: 2 }).default("0"), // Fee charged for instant payouts
   createdAt: timestamp("created_at").defaultNow(),
 });
+
+// === PLATFORM FEES (Revenue from instant payouts) ===
+export const platformFees = pgTable("platform_fees", {
+  id: serial("id").primaryKey(),
+  payoutId: integer("payout_id").notNull(),
+  leagueId: integer("league_id").notNull(),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  feeType: text("fee_type").notNull().default("instant_payout"), // 'instant_payout'
+  status: text("status").notNull().default("pending"), // 'pending', 'transferred', 'failed'
+  stripeTransferId: text("stripe_transfer_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const platformFeesRelations = relations(platformFees, ({ one }) => ({
+  payout: one(payouts, {
+    fields: [platformFees.payoutId],
+    references: [payouts.id],
+  }),
+  league: one(leagues, {
+    fields: [platformFees.leagueId],
+    references: [leagues.id],
+  }),
+}));
 
 export const payoutsRelations = relations(payouts, ({ one }) => ({
   league: one(leagues, {
@@ -128,8 +153,9 @@ export const weeklyScoresRelations = relations(weeklyScores, ({ one }) => ({
 export const insertLeagueSchema = createInsertSchema(leagues).omit({ id: true, createdAt: true, totalDues: true });
 export const insertLeagueMemberSchema = createInsertSchema(leagueMembers).omit({ id: true, joinedAt: true });
 export const insertPaymentSchema = createInsertSchema(payments).omit({ id: true, createdAt: true, status: true, stripePaymentIntentId: true });
-export const insertPayoutSchema = createInsertSchema(payouts).omit({ id: true, createdAt: true, status: true });
+export const insertPayoutSchema = createInsertSchema(payouts).omit({ id: true, createdAt: true, status: true, feeAmount: true });
 export const insertWeeklyScoreSchema = createInsertSchema(weeklyScores).omit({ id: true, createdAt: true });
+export const insertPlatformFeeSchema = createInsertSchema(platformFees).omit({ id: true, createdAt: true, status: true, stripeTransferId: true });
 
 // === TYPES ===
 export type League = typeof leagues.$inferSelect;
@@ -142,5 +168,7 @@ export type Payout = typeof payouts.$inferSelect;
 export type InsertPayout = z.infer<typeof insertPayoutSchema>;
 export type WeeklyScore = typeof weeklyScores.$inferSelect;
 export type InsertWeeklyScore = z.infer<typeof insertWeeklyScoreSchema>;
+export type PlatformFee = typeof platformFees.$inferSelect;
+export type InsertPlatformFee = z.infer<typeof insertPlatformFeeSchema>;
 
 export type LeagueWithMembers = League & { members: (LeagueMember & { user: typeof users.$inferSelect })[] };
