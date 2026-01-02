@@ -28,6 +28,10 @@ export default function PayLps() {
   const payMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest('POST', `/api/lps-payment/${token}/pay`, {});
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ message: 'Payment failed' }));
+        throw new Error(errorData.message || 'Could not process payment');
+      }
       return res.json();
     },
     onSuccess: () => {
@@ -36,7 +40,7 @@ export default function PayLps() {
         description: "Your lowest scorer fee has been paid.",
       });
     },
-    onError: (err: any) => {
+    onError: (err: Error) => {
       toast({
         title: "Payment Failed",
         description: err.message || "Could not process payment. Please try again.",
