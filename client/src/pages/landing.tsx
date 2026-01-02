@@ -67,7 +67,7 @@ export default function Landing() {
                 className="h-12 px-8 text-lg rounded-full shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 transition-all hover:-translate-y-1"
                 onClick={() => window.location.href = "/api/login"}
               >
-                Start Your League
+                Set Up League
               </Button>
               <Button 
                 variant="outline" 
