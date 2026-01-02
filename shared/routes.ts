@@ -120,6 +120,59 @@ export const api = {
         201: z.custom<typeof weeklyScores.$inferSelect>(),
       }
     }
+  },
+  wallets: {
+    myWallets: {
+      method: 'GET' as const,
+      path: '/api/wallets/me',
+      responses: {
+        200: z.array(z.any()),
+      }
+    },
+    getWallet: {
+      method: 'GET' as const,
+      path: '/api/leagues/:id/wallet',
+      responses: {
+        200: z.any(),
+      }
+    },
+    transactions: {
+      method: 'GET' as const,
+      path: '/api/wallets/:id/transactions',
+      responses: {
+        200: z.array(z.any()),
+      }
+    },
+    treasury: {
+      method: 'GET' as const,
+      path: '/api/leagues/:id/treasury',
+      responses: {
+        200: z.object({
+          totalInflow: z.string(),
+          totalOutflow: z.string(),
+          availableBalance: z.string(),
+        }),
+      }
+    },
+    withdraw: {
+      method: 'POST' as const,
+      path: '/api/wallets/:id/withdraw',
+      input: z.object({
+        amount: z.number().positive(),
+        payoutType: z.enum(['standard', 'instant']).default('standard'),
+      }),
+      responses: {
+        201: z.any(),
+        400: errorSchemas.validation,
+      }
+    },
+    withdrawals: {
+      method: 'GET' as const,
+      path: '/api/withdrawals/me',
+      responses: {
+        200: z.array(z.any()),
+      }
+    }
   }
 };
 

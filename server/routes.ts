@@ -236,6 +236,16 @@ export async function registerRoutes(
         feeAmount
       });
 
+      // Credit the recipient's wallet
+      const recipientWallet = await storage.getOrCreateWallet(Number(leagueId), recipientId);
+      await storage.creditWallet(
+        recipientWallet.id,
+        netAmount,
+        'payout',
+        payout.id,
+        `${reason === 'weekly_high_score' ? 'Weekly High Score' : reason === 'championship' ? 'Championship Prize' : reason === 'refund' ? 'Refund' : 'Payout'} - Week ${week || 'N/A'}`
+      );
+
       // If instant payout with fee, record the platform fee
       if (payoutType === 'instant' && Number(feeAmount) > 0) {
         const platformFee = await storage.createPlatformFee({
@@ -253,7 +263,8 @@ export async function registerRoutes(
       res.status(201).json({ 
         ...payout, 
         feeCharged: feeAmount,
-        estimatedArrival: payoutType === 'instant' ? 'Immediate' : '3-5 business days'
+        estimatedArrival: payoutType === 'instant' ? 'Immediate' : '3-5 business days',
+        walletCredited: true
       });
     } catch (err) {
       console.error("Error creating payout:", err);
@@ -375,6 +386,181 @@ export async function registerRoutes(
     } catch (err) {
       console.error("Error fetching scores:", err);
       res.status(500).json({ message: "Failed to fetch scores" });
+    }
+  });
+
+  // === WALLETS ===
+  // Get user's wallets across all leagues
+  app.get(api.wallets.myWallets.path, isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const wallets = await storage.getUserWallets(userId);
+      
+      // Enrich with league names
+      const enrichedWallets = await Promise.all(wallets.map(async (wallet) => {
+        const league = await storage.getLeague(wallet.leagueId);
+        return {
+          ...wallet,
+          leagueName: league?.name || 'Unknown League'
+        };
+      }));
+      
+      res.json(enrichedWallets);
+    } catch (err) {
+      console.error("Error fetching user wallets:", err);
+      res.status(500).json({ message: "Failed to fetch wallets" });
+    }
+  });
+
+  // Get user's wallet for a specific league
+  app.get(api.wallets.getWallet.path, isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const leagueId = Number(req.params.id);
+      
+      const wallet = await storage.getOrCreateWallet(leagueId, userId);
+      const transactions = await storage.getWalletTransactions(wallet.id);
+      const league = await storage.getLeague(leagueId);
+      
+      res.json({
+        ...wallet,
+        leagueName: league?.name || 'Unknown League',
+        transactions
+      });
+    } catch (err) {
+      console.error("Error fetching wallet:", err);
+      res.status(500).json({ message: "Failed to fetch wallet" });
+    }
+  });
+
+  // Get wallet transactions
+  app.get(api.wallets.transactions.path, isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const walletId = Number(req.params.id);
+      
+      const wallet = await storage.getMemberWalletById(walletId);
+      if (!wallet || wallet.userId !== userId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      const transactions = await storage.getWalletTransactions(walletId);
+      res.json(transactions);
+    } catch (err) {
+      console.error("Error fetching transactions:", err);
+      res.status(500).json({ message: "Failed to fetch transactions" });
+    }
+  });
+
+  // Get league treasury (commissioner only)
+  app.get(api.wallets.treasury.path, isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const leagueId = Number(req.params.id);
+      
+      const league = await storage.getLeague(leagueId);
+      if (!league) {
+        return res.status(404).json({ message: "League not found" });
+      }
+      
+      // Only commissioner can view treasury
+      if (league.commissionerId !== userId) {
+        const isAdmin = await storage.isUserAdmin(userId);
+        if (!isAdmin) {
+          return res.status(403).json({ message: "Only commissioner can view treasury" });
+        }
+      }
+      
+      const treasury = await storage.getLeagueTreasury(leagueId);
+      const memberWallets = await storage.getLeagueWallets(leagueId);
+      
+      res.json({
+        ...treasury,
+        memberWallets,
+        leagueName: league.name
+      });
+    } catch (err) {
+      console.error("Error fetching treasury:", err);
+      res.status(500).json({ message: "Failed to fetch treasury" });
+    }
+  });
+
+  // Withdraw funds from wallet
+  const WITHDRAWAL_INSTANT_FEE_PERCENT = 2.5;
+  
+  app.post(api.wallets.withdraw.path, isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const walletId = Number(req.params.id);
+      const { amount, payoutType = 'standard' } = req.body;
+      
+      const wallet = await storage.getMemberWalletById(walletId);
+      if (!wallet || wallet.userId !== userId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      if (Number(wallet.availableBalance) < amount) {
+        return res.status(400).json({ message: "Insufficient balance" });
+      }
+      
+      // Calculate fee for instant withdrawals
+      let feeAmount = "0";
+      let netAmount = String(amount);
+      
+      if (payoutType === 'instant') {
+        const fee = (Number(amount) * WITHDRAWAL_INSTANT_FEE_PERCENT / 100);
+        feeAmount = fee.toFixed(2);
+        netAmount = (Number(amount) - Number(feeAmount)).toFixed(2);
+      }
+      
+      // Create withdrawal request
+      const withdrawalRequest = await storage.createWithdrawalRequest({
+        walletId,
+        leagueId: wallet.leagueId,
+        userId,
+        amount: String(amount),
+        payoutType,
+        feeAmount,
+        netAmount
+      });
+      
+      // Debit wallet
+      await storage.debitWallet(
+        walletId,
+        String(amount),
+        'withdrawal',
+        withdrawalRequest.id,
+        `Withdrawal request - ${payoutType === 'instant' ? 'Instant' : 'Standard'}`
+      );
+      
+      // For instant, auto-complete (simulated). For standard, leave as pending
+      if (payoutType === 'instant') {
+        await storage.updateWithdrawalStatus(withdrawalRequest.id, 'completed', 'simulated_transfer_' + Date.now());
+      } else {
+        await storage.updateWithdrawalStatus(withdrawalRequest.id, 'processing');
+      }
+      
+      res.status(201).json({
+        ...withdrawalRequest,
+        feeAmount,
+        netAmount,
+        estimatedArrival: payoutType === 'instant' ? 'Immediate' : '3-5 business days'
+      });
+    } catch (err: any) {
+      console.error("Error processing withdrawal:", err);
+      res.status(500).json({ message: err.message || "Failed to process withdrawal" });
+    }
+  });
+
+  // Get user's withdrawal history
+  app.get(api.wallets.withdrawals.path, isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const withdrawals = await storage.getUserWithdrawals(userId);
+      res.json(withdrawals);
+    } catch (err) {
+      console.error("Error fetching withdrawals:", err);
+      res.status(500).json({ message: "Failed to fetch withdrawals" });
     }
   });
 
