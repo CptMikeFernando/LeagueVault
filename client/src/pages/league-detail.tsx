@@ -40,7 +40,8 @@ import {
   Save,
   Phone,
   MessageSquare,
-  Link2
+  Link2,
+  Calculator
 } from "lucide-react";
 import { useState } from "react";
 import { format } from "date-fns";
@@ -233,9 +234,13 @@ export default function LeagueDetail() {
             <div className="space-y-6">
               <Card>
                 <CardHeader>
-                  <CardTitle>Payout Rules</CardTitle>
+                  <CardTitle>League Info</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  <div className="flex justify-between text-sm pb-2 border-b">
+                    <span className="text-muted-foreground">Members</span>
+                    <span className="font-mono font-medium" data-testid="text-member-count">{league.members?.length || 0} teams</span>
+                  </div>
                   <div className="flex justify-between text-sm pb-2 border-b">
                     <span className="text-muted-foreground">Entry Fee</span>
                     <span className="font-mono font-medium">${league.settings?.entryFee || league.settings?.seasonDues || 0}</span>
@@ -270,6 +275,8 @@ export default function LeagueDetail() {
                   </div>
                 </CardContent>
               </Card>
+
+              <PayoutCalculatorCard league={league} />
             </div>
           </div>
         </TabsContent>
@@ -391,6 +398,91 @@ export default function LeagueDetail() {
         )}
       </Tabs>
     </div>
+  );
+}
+
+function PayoutCalculatorCard({ league }: { league: any }) {
+  const settings = league.settings || {};
+  const memberCount = league.members?.length || 0;
+  const numberOfWeeks = settings.numberOfWeeks || 17;
+  
+  const entryFee = Number(settings.entryFee || settings.seasonDues || 0);
+  const firstPlace = Number(settings.firstPlacePayout || 0);
+  const secondPlace = Number(settings.secondPlacePayout || 0);
+  const thirdPlace = Number(settings.thirdPlacePayout || 0);
+  const weeklyHps = Number(settings.weeklyHighScorePrize || settings.weeklyPayoutAmount || 0);
+  const weeklyLps = Number(settings.weeklyLowScoreFee || 0);
+  const lpsEnabled = settings.weeklyLowScoreFeeEnabled || false;
+  
+  const totalRevenue = memberCount * entryFee;
+  const totalWeeklyLpsRevenue = lpsEnabled ? weeklyLps * numberOfWeeks : 0;
+  const totalIncome = totalRevenue + totalWeeklyLpsRevenue;
+  
+  const seasonPayouts = firstPlace + secondPlace + thirdPlace;
+  const totalWeeklyHpsPayouts = weeklyHps * numberOfWeeks;
+  const totalPayouts = seasonPayouts + totalWeeklyHpsPayouts;
+  
+  const balance = totalIncome - totalPayouts;
+  const isBalanced = balance >= 0;
+  
+  return (
+    <Card data-testid="card-payout-calculator">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Calculator className="w-5 h-5" />
+          Budget Forecast
+        </CardTitle>
+        <CardDescription>Projected season income vs payouts</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-2 text-sm">
+          <p className="font-medium text-foreground">Entry Fee Revenue</p>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">{memberCount} members x ${entryFee}</span>
+            <span className="font-mono text-green-600">+${totalRevenue.toFixed(2)}</span>
+          </div>
+        </div>
+        
+        {lpsEnabled && (
+          <div className="space-y-2 text-sm">
+            <p className="font-medium text-foreground">Est. LPS Revenue</p>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">{numberOfWeeks} weeks x ${weeklyLps}</span>
+              <span className="font-mono text-green-600">+${totalWeeklyLpsRevenue.toFixed(2)}</span>
+            </div>
+            <p className="text-xs text-muted-foreground">Collected weekly from lowest scorers</p>
+          </div>
+        )}
+        
+        <div className="space-y-2 text-sm border-t pt-3">
+          <p className="font-medium text-foreground">Planned Payouts</p>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Season (1st + 2nd + 3rd)</span>
+            <span className="font-mono text-red-600">-${seasonPayouts.toFixed(2)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">{numberOfWeeks} weeks x ${weeklyHps} HPS</span>
+            <span className="font-mono text-red-600">-${totalWeeklyHpsPayouts.toFixed(2)}</span>
+          </div>
+        </div>
+        
+        <div className={`p-3 rounded-md ${isBalanced ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800' : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'}`}>
+          <div className="flex justify-between items-center">
+            <span className={`font-medium ${isBalanced ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`}>
+              {isBalanced ? 'Payouts Covered' : 'Shortfall'}
+            </span>
+            <span className={`font-mono font-bold ${isBalanced ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`} data-testid="text-payout-balance">
+              {isBalanced ? `+$${balance.toFixed(2)}` : `-$${Math.abs(balance).toFixed(2)}`}
+            </span>
+          </div>
+          {!isBalanced && (
+            <p className="text-xs text-red-600 dark:text-red-400 mt-1">
+              Increase entry fees or reduce payouts to cover the shortfall.
+            </p>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -942,6 +1034,7 @@ function LeagueSettingsForm({ league }: { league: any }) {
   const settings = league.settings || {};
   
   const [entryFee, setEntryFee] = useState(String(settings.entryFee || settings.seasonDues || 0));
+  const [numberOfWeeks, setNumberOfWeeks] = useState(String(settings.numberOfWeeks || 17));
   const [firstPlacePayout, setFirstPlacePayout] = useState(String(settings.firstPlacePayout || 0));
   const [secondPlacePayout, setSecondPlacePayout] = useState(String(settings.secondPlacePayout || 0));
   const [thirdPlacePayout, setThirdPlacePayout] = useState(String(settings.thirdPlacePayout || 0));
@@ -974,6 +1067,7 @@ function LeagueSettingsForm({ league }: { league: any }) {
     e.preventDefault();
     updateSettings.mutate({
       entryFee: Number(entryFee),
+      numberOfWeeks: Number(numberOfWeeks),
       firstPlacePayout: Number(firstPlacePayout),
       secondPlacePayout: Number(secondPlacePayout),
       thirdPlacePayout: Number(thirdPlacePayout),
@@ -995,21 +1089,37 @@ function LeagueSettingsForm({ league }: { league: any }) {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="space-y-2">
-              <Label htmlFor="entryFee">Entry Fee (Per Person)</Label>
-              <div className="relative">
-                <span className="absolute left-3 top-2.5 text-muted-foreground">$</span>
-                <Input 
-                  id="entryFee" 
-                  type="number" 
-                  min="0"
-                  className="pl-8 font-mono"
-                  value={entryFee}
-                  onChange={(e) => setEntryFee(e.target.value)}
-                  data-testid="input-settings-entry-fee"
-                />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="entryFee">Entry Fee (Per Person)</Label>
+                <div className="relative">
+                  <span className="absolute left-3 top-2.5 text-muted-foreground">$</span>
+                  <Input 
+                    id="entryFee" 
+                    type="number" 
+                    min="0"
+                    className="pl-8 font-mono"
+                    value={entryFee}
+                    onChange={(e) => setEntryFee(e.target.value)}
+                    data-testid="input-settings-entry-fee"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">Amount each member pays to join.</p>
               </div>
-              <p className="text-xs text-muted-foreground">Amount each member pays to join.</p>
+              <div className="space-y-2">
+                <Label htmlFor="numberOfWeeks">Number of Weeks</Label>
+                <Input 
+                  id="numberOfWeeks" 
+                  type="number" 
+                  min="1"
+                  max="21"
+                  className="font-mono"
+                  value={numberOfWeeks}
+                  onChange={(e) => setNumberOfWeeks(e.target.value)}
+                  data-testid="input-settings-number-of-weeks"
+                />
+                <p className="text-xs text-muted-foreground">Total weeks in the regular season (for HPS/LPS).</p>
+              </div>
             </div>
 
             <Separator />
