@@ -21,7 +21,7 @@ export function useCreatePayment() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async (data: InsertPayment) => {
+    mutationFn: async (data: { leagueId: number; amount: number }) => {
       const res = await fetch(api.payments.create.path, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
