@@ -1831,6 +1831,7 @@ function InviteMemberDialog({ leagueId }: { leagueId: number }) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/leagues', leagueId, 'invites'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/leagues', leagueId] });
       toast({ title: "Invite sent!", description: `Invitation sent via ${contactType === 'phone' ? 'SMS' : 'email'}` });
       setOpen(false);
       setContactValue('');
@@ -2008,7 +2009,7 @@ function PendingInvitesSection({ leagueId }: { leagueId: number }) {
               ) : (
                 <Mail className="w-4 h-4 text-muted-foreground flex-shrink-0" />
               )}
-              <span className="text-sm truncate">{invite.contactValue}</span>
+              <span className="text-sm truncate">{invite.ownerName || invite.contactValue}</span>
             </div>
             <div className="flex items-center gap-2">
               <Badge variant="outline" className="capitalize">{invite.status}</Badge>

@@ -1482,6 +1482,17 @@ export async function registerRoutes(
         ownerName: ownerName || null
       });
 
+      // Create a placeholder league member immediately with phone number
+      const placeholderUserId = `invite_${invite.id}`;
+      await storage.addLeagueMember({
+        leagueId,
+        userId: placeholderUserId,
+        role: 'member',
+        teamName: teamName || ownerName || 'Pending Member',
+        phoneNumber: contactType === 'phone' ? contactValue : null,
+        paidStatus: 'unpaid'
+      });
+
       // Send invite via SMS if phone
       console.log('=== INVITE SMS DEBUG START ===');
       console.log('Contact type:', contactType);
