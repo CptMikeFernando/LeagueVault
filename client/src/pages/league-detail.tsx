@@ -2108,7 +2108,6 @@ function MessageBoard({ leagueId }: { leagueId: number }) {
     }
   };
 
-  const sortedMessages = messages ? [...messages].reverse() : [];
 
   return (
     <Card>
@@ -2133,13 +2132,13 @@ function MessageBoard({ leagueId }: { leagueId: number }) {
                 </div>
               ))}
             </div>
-          ) : sortedMessages.length === 0 ? (
+          ) : !messages || messages.length === 0 ? (
             <p className="text-center text-muted-foreground text-sm py-8">
               No messages yet. Be the first to post!
             </p>
           ) : (
-            <div className="space-y-4">
-              {sortedMessages.map((msg: any) => (
+            <div className="space-y-4 flex flex-col-reverse">
+              {messages?.map((msg: any) => (
                 <div key={msg.id} className="flex gap-3 group" data-testid={`message-${msg.id}`}>
                   <Avatar className="h-8 w-8">
                     <AvatarFallback>
