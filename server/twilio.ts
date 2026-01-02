@@ -50,10 +50,17 @@ export async function getTwilioFromPhoneNumber() {
 
 export async function sendSMS(to: string, message: string): Promise<{ success: boolean; messageId?: string; error?: string }> {
   try {
+    console.log('=== TWILIO SEND SMS ===');
+    console.log('To:', to);
+    console.log('Message length:', message.length);
+    
     const client = await getTwilioClient();
     const fromNumber = await getTwilioFromPhoneNumber();
     
+    console.log('From number:', fromNumber);
+    
     if (!fromNumber) {
+      console.error('No Twilio phone number configured');
       return { success: false, error: 'No Twilio phone number configured' };
     }
 
@@ -63,9 +70,12 @@ export async function sendSMS(to: string, message: string): Promise<{ success: b
       to: to
     });
 
+    console.log('Twilio result - SID:', result.sid, 'Status:', result.status);
     return { success: true, messageId: result.sid };
   } catch (error: any) {
-    console.error('Twilio SMS error:', error);
+    console.error('Twilio SMS error:', error.message);
+    console.error('Twilio error code:', error.code);
+    console.error('Twilio error details:', JSON.stringify(error));
     return { success: false, error: error.message || 'Failed to send SMS' };
   }
 }
