@@ -328,6 +328,8 @@ export const leagueInvites = pgTable("league_invites", {
   invitedBy: text("invited_by").notNull(),
   contactType: text("contact_type").notNull(), // 'phone' or 'email'
   contactValue: text("contact_value").notNull(), // phone number or email
+  teamName: text("team_name"),
+  ownerName: text("owner_name"),
   status: text("status").notNull().default("pending"), // 'pending', 'sent', 'accepted', 'expired'
   inviteToken: text("invite_token").notNull(),
   createdAt: timestamp("created_at").defaultNow(),

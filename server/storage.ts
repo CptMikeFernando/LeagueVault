@@ -107,7 +107,7 @@ export interface IStorage {
   deleteLeagueMessage(messageId: number): Promise<void>;
 
   // League invites
-  createLeagueInvite(invite: { leagueId: number; invitedBy: string; contactType: string; contactValue: string; inviteToken: string }): Promise<LeagueInvite>;
+  createLeagueInvite(invite: { leagueId: number; invitedBy: string; contactType: string; contactValue: string; inviteToken: string; teamName?: string; ownerName?: string }): Promise<LeagueInvite>;
   getLeagueInvites(leagueId: number): Promise<LeagueInvite[]>;
   updateInviteStatus(id: number, status: string): Promise<void>;
 
@@ -646,7 +646,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // League invites
-  async createLeagueInvite(invite: { leagueId: number; invitedBy: string; contactType: string; contactValue: string; inviteToken: string }): Promise<LeagueInvite> {
+  async createLeagueInvite(invite: { leagueId: number; invitedBy: string; contactType: string; contactValue: string; inviteToken: string; teamName?: string; ownerName?: string }): Promise<LeagueInvite> {
     const [result] = await db.insert(leagueInvites).values(invite).returning();
     return result;
   }

@@ -1812,13 +1812,17 @@ function InviteMemberDialog({ leagueId }: { leagueId: number }) {
   const [open, setOpen] = useState(false);
   const [contactType, setContactType] = useState<'phone' | 'email'>('phone');
   const [contactValue, setContactValue] = useState('');
+  const [teamName, setTeamName] = useState('');
+  const [ownerName, setOwnerName] = useState('');
   const { toast } = useToast();
 
   const sendInvite = useMutation({
     mutationFn: async () => {
       const res = await apiRequest('POST', `/api/leagues/${leagueId}/invites`, {
         contactType,
-        contactValue
+        contactValue,
+        teamName: teamName.trim() || undefined,
+        ownerName: ownerName.trim() || undefined
       });
       if (!res.ok) {
         const data = await res.json();
@@ -1831,6 +1835,8 @@ function InviteMemberDialog({ leagueId }: { leagueId: number }) {
       toast({ title: "Invite sent!", description: `Invitation sent via ${contactType === 'phone' ? 'SMS' : 'email'}` });
       setOpen(false);
       setContactValue('');
+      setTeamName('');
+      setOwnerName('');
     },
     onError: (err: any) => {
       toast({ title: "Failed to send invite", description: err.message, variant: "destructive" });
@@ -1851,6 +1857,26 @@ function InviteMemberDialog({ leagueId }: { leagueId: number }) {
           <DialogDescription>Send an invite via phone number or email address</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label>Team Name</Label>
+              <Input
+                placeholder="Team Thunderbolts"
+                value={teamName}
+                onChange={(e) => setTeamName(e.target.value)}
+                data-testid="input-invite-team-name"
+              />
+            </div>
+            <div>
+              <Label>Owner Name</Label>
+              <Input
+                placeholder="John Smith"
+                value={ownerName}
+                onChange={(e) => setOwnerName(e.target.value)}
+                data-testid="input-invite-owner-name"
+              />
+            </div>
+          </div>
           <div className="flex gap-2">
             <Button
               variant={contactType === 'phone' ? 'default' : 'outline'}

@@ -1419,7 +1419,7 @@ export async function registerRoutes(
     try {
       const userId = req.user.claims.sub;
       const leagueId = Number(req.params.id);
-      const { contactType, contactValue } = req.body;
+      const { contactType, contactValue, teamName, ownerName } = req.body;
 
       if (!contactType || !contactValue) {
         return res.status(400).json({ message: "Contact type and value are required" });
@@ -1444,7 +1444,9 @@ export async function registerRoutes(
         invitedBy: userId,
         contactType,
         contactValue,
-        inviteToken
+        inviteToken,
+        teamName: teamName || null,
+        ownerName: ownerName || null
       });
 
       // Send invite via SMS if phone
