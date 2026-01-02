@@ -178,8 +178,8 @@ export default function LeagueDetail() {
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-2 space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch">
+            <div className="lg:col-span-2 flex flex-col gap-6">
               <Card>
                 <CardHeader>
                   <CardTitle>My Status</CardTitle>
@@ -211,7 +211,7 @@ export default function LeagueDetail() {
               <MessageBoard leagueId={league.id} />
             </div>
 
-            <div className="space-y-6">
+            <div className="flex flex-col gap-6">
               <Card>
                 <CardHeader>
                   <CardTitle>League Info</CardTitle>
@@ -1779,7 +1779,7 @@ function MessageBoard({ leagueId }: { leagueId: number }) {
   const sortedMessages = messages ? [...messages].reverse() : [];
 
   return (
-    <Card>
+    <Card className="flex-1 flex flex-col">
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2">
           <MessageSquare className="w-5 h-5" />
@@ -1787,8 +1787,8 @@ function MessageBoard({ leagueId }: { leagueId: number }) {
         </CardTitle>
         <CardDescription>Chat with your league members</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <ScrollArea className="h-[250px]">
+      <CardContent className="flex-1 flex flex-col space-y-4">
+        <ScrollArea className="flex-1 min-h-[250px]">
           {isLoading ? (
             <div className="space-y-3">
               {[1, 2, 3].map(i => (
