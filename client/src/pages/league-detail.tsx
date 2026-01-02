@@ -537,15 +537,18 @@ function IssuePayoutForm({ league }: { league: any }) {
   const createPayout = useCreatePayout();
   const [recipientId, setRecipientId] = useState("");
   const [amount, setAmount] = useState("");
-  const [reason, setReason] = useState("other");
+  const [reason, setReason] = useState("");
   const [payoutType, setPayoutType] = useState<'standard' | 'instant'>('standard');
 
   const INSTANT_FEE_PERCENT = 2.5;
   const feeAmount = payoutType === 'instant' && amount ? (Number(amount) * INSTANT_FEE_PERCENT / 100).toFixed(2) : "0.00";
   const netAmount = payoutType === 'instant' && amount ? (Number(amount) - Number(feeAmount)).toFixed(2) : amount;
 
+  const isFormValid = recipientId && amount && Number(amount) > 0 && reason;
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isFormValid) return;
     createPayout.mutate({
       leagueId: league.id,
       userId: recipientId,
@@ -593,7 +596,9 @@ function IssuePayoutForm({ league }: { league: any }) {
        <div className="space-y-2">
          <Label>Reason</Label>
          <Select onValueChange={setReason} value={reason}>
-            <SelectTrigger data-testid="select-payout-reason"><SelectValue /></SelectTrigger>
+            <SelectTrigger data-testid="select-payout-reason">
+              <SelectValue placeholder="Select reason" />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="1st_place">1st Place</SelectItem>
               <SelectItem value="2nd_place">2nd Place</SelectItem>
@@ -648,7 +653,7 @@ function IssuePayoutForm({ league }: { league: any }) {
            </div>
          </div>
        )}
-       <Button type="submit" className="w-full" disabled={createPayout.isPending} data-testid="button-issue-payout">
+       <Button type="submit" className="w-full" disabled={createPayout.isPending || !isFormValid} data-testid="button-issue-payout">
          {createPayout.isPending ? "Issuing..." : payoutType === 'instant' ? `Issue Instant Payout ($${feeAmount} fee)` : "Issue Payout"}
        </Button>
     </form>
