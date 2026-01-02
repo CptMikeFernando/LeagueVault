@@ -1503,7 +1503,7 @@ export async function registerRoutes(
               ? `https://${process.env.REPLIT_DEV_DOMAIN}` 
               : 'https://your-app.replit.app';
             const leagueUrl = `${baseUrl}/leagues/${leagueId}`;
-            const message = `You've been invited to join ${league.name} on LeagueVault! Click here to join and pay your dues: ${leagueUrl}`;
+            const message = `You've been invited to pay your dues for ${league.name} on LeagueVault! Click here to pay your dues now.\n\n${leagueUrl}`;
             
             console.log('Sending invite SMS to:', contactValue);
             console.log('Message:', message);
@@ -1632,8 +1632,11 @@ export async function registerRoutes(
         return res.status(400).json({ message: "SMS not configured" });
       }
 
-      const entryFee = league.settings?.entryFee || league.settings?.seasonDues || 0;
-      const message = `Reminder: Your $${entryFee} dues for "${league.name}" are still unpaid. Please pay at your earliest convenience. - LeagueVault`;
+      const baseUrl = process.env.REPLIT_DEV_DOMAIN 
+        ? `https://${process.env.REPLIT_DEV_DOMAIN}` 
+        : 'https://your-app.replit.app';
+      const leagueUrl = `${baseUrl}/leagues/${leagueId}`;
+      const message = `Hey, nerd. You still haven't paid your dues for ${league.name}. Pay up or shut up.\n\n${leagueUrl}`;
       
       const smsResult = await sendSMS(member.phoneNumber, message);
       

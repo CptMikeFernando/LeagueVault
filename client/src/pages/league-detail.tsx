@@ -1952,12 +1952,12 @@ function SendReminderButton({ leagueId, memberId, hasPhone }: { leagueId: number
   return (
     <Button
       size="sm"
-      variant="ghost"
+      variant="outline"
       onClick={() => sendReminder.mutate()}
       disabled={sendReminder.isPending}
       data-testid={`button-remind-${memberId}`}
     >
-      <Bell className="w-4 h-4" />
+      {sendReminder.isPending ? 'Sending...' : 'Send Reminder'}
     </Button>
   );
 }
