@@ -291,6 +291,7 @@ export default function LeagueDetail() {
                     <TableRow key={member.id}>
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
+                          {isCommissioner && <EditMemberDialog leagueId={league.id} member={member} />}
                           <Avatar className="h-8 w-8">
                              <AvatarFallback>{(member.ownerName || member.user?.firstName || member.userId).substring(0,2).toUpperCase()}</AvatarFallback>
                           </Avatar>
@@ -307,7 +308,6 @@ export default function LeagueDetail() {
                       {isCommissioner && (
                         <TableCell>
                           <div className="flex items-center gap-2">
-                            <EditMemberDialog leagueId={league.id} member={member} />
                             <SendReminderButton leagueId={league.id} memberId={member.id} hasPhone={!!member.phoneNumber} hasEmail={!!member.email} paidStatus={member.paidStatus} />
                           </div>
                         </TableCell>
