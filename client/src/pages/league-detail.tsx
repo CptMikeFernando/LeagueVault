@@ -285,7 +285,7 @@ export default function LeagueDetail() {
                     <TableHead>Role</TableHead>
                     <TableHead>Status</TableHead>
                     {isCommissioner && <TableHead>Invite</TableHead>}
-                    {isCommissioner && <TableHead>Actions</TableHead>}
+                    {isCommissioner && <TableHead>Payment</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -2181,7 +2181,7 @@ function SendReminderButton({ leagueId, memberId, hasPhone, hasEmail, paidStatus
   });
 
   if (paidStatus === 'paid') {
-    return <span className="text-sm text-muted-foreground">Paid</span>;
+    return <span className="text-sm text-green-600 font-medium">Complete</span>;
   }
 
   if (!hasPhone && !hasEmail) {
