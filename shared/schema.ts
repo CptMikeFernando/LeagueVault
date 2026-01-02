@@ -149,6 +149,93 @@ export const weeklyScoresRelations = relations(weeklyScores, ({ one }) => ({
   }),
 }));
 
+// === MEMBER WALLETS (Individual balances per league) ===
+export const memberWallets = pgTable("member_wallets", {
+  id: serial("id").primaryKey(),
+  leagueId: integer("league_id").notNull(),
+  userId: text("user_id").notNull(),
+  availableBalance: decimal("available_balance", { precision: 10, scale: 2 }).notNull().default("0"),
+  pendingBalance: decimal("pending_balance", { precision: 10, scale: 2 }).notNull().default("0"),
+  totalEarnings: decimal("total_earnings", { precision: 10, scale: 2 }).notNull().default("0"),
+  totalWithdrawn: decimal("total_withdrawn", { precision: 10, scale: 2 }).notNull().default("0"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const memberWalletsRelations = relations(memberWallets, ({ one, many }) => ({
+  league: one(leagues, {
+    fields: [memberWallets.leagueId],
+    references: [leagues.id],
+  }),
+  user: one(users, {
+    fields: [memberWallets.userId],
+    references: [users.id],
+  }),
+  transactions: many(walletTransactions),
+}));
+
+// === WALLET TRANSACTIONS (Immutable ledger) ===
+export const walletTransactions = pgTable("wallet_transactions", {
+  id: serial("id").primaryKey(),
+  walletId: integer("wallet_id").notNull(),
+  leagueId: integer("league_id").notNull(),
+  userId: text("user_id").notNull(),
+  type: text("type").notNull(), // 'credit', 'debit'
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  sourceType: text("source_type").notNull(), // 'payout', 'withdrawal', 'adjustment', 'refund'
+  sourceId: integer("source_id"), // Reference to payout/withdrawal ID
+  description: text("description"),
+  balanceAfter: decimal("balance_after", { precision: 10, scale: 2 }).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const walletTransactionsRelations = relations(walletTransactions, ({ one }) => ({
+  wallet: one(memberWallets, {
+    fields: [walletTransactions.walletId],
+    references: [memberWallets.id],
+  }),
+  league: one(leagues, {
+    fields: [walletTransactions.leagueId],
+    references: [leagues.id],
+  }),
+  user: one(users, {
+    fields: [walletTransactions.userId],
+    references: [users.id],
+  }),
+}));
+
+// === WITHDRAWAL REQUESTS ===
+export const withdrawalRequests = pgTable("withdrawal_requests", {
+  id: serial("id").primaryKey(),
+  walletId: integer("wallet_id").notNull(),
+  leagueId: integer("league_id").notNull(),
+  userId: text("user_id").notNull(),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  status: text("status").notNull().default("pending"), // 'pending', 'processing', 'completed', 'failed'
+  payoutType: text("payout_type").notNull().default("standard"), // 'instant', 'standard'
+  feeAmount: decimal("fee_amount", { precision: 10, scale: 2 }).default("0"),
+  netAmount: decimal("net_amount", { precision: 10, scale: 2 }).notNull(),
+  stripeTransferId: text("stripe_transfer_id"),
+  failureReason: text("failure_reason"),
+  requestedAt: timestamp("requested_at").defaultNow(),
+  processedAt: timestamp("processed_at"),
+});
+
+export const withdrawalRequestsRelations = relations(withdrawalRequests, ({ one }) => ({
+  wallet: one(memberWallets, {
+    fields: [withdrawalRequests.walletId],
+    references: [memberWallets.id],
+  }),
+  league: one(leagues, {
+    fields: [withdrawalRequests.leagueId],
+    references: [leagues.id],
+  }),
+  user: one(users, {
+    fields: [withdrawalRequests.userId],
+    references: [users.id],
+  }),
+}));
+
 // === ZOD SCHEMAS ===
 export const insertLeagueSchema = createInsertSchema(leagues).omit({ id: true, createdAt: true, totalDues: true });
 export const insertLeagueMemberSchema = createInsertSchema(leagueMembers).omit({ id: true, joinedAt: true });
@@ -156,6 +243,9 @@ export const insertPaymentSchema = createInsertSchema(payments).omit({ id: true,
 export const insertPayoutSchema = createInsertSchema(payouts).omit({ id: true, createdAt: true, status: true, feeAmount: true });
 export const insertWeeklyScoreSchema = createInsertSchema(weeklyScores).omit({ id: true, createdAt: true });
 export const insertPlatformFeeSchema = createInsertSchema(platformFees).omit({ id: true, createdAt: true, status: true, stripeTransferId: true });
+export const insertMemberWalletSchema = createInsertSchema(memberWallets).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertWalletTransactionSchema = createInsertSchema(walletTransactions).omit({ id: true, createdAt: true });
+export const insertWithdrawalRequestSchema = createInsertSchema(withdrawalRequests).omit({ id: true, requestedAt: true, processedAt: true, status: true, stripeTransferId: true, failureReason: true });
 
 // === TYPES ===
 export type League = typeof leagues.$inferSelect;
@@ -170,5 +260,11 @@ export type WeeklyScore = typeof weeklyScores.$inferSelect;
 export type InsertWeeklyScore = z.infer<typeof insertWeeklyScoreSchema>;
 export type PlatformFee = typeof platformFees.$inferSelect;
 export type InsertPlatformFee = z.infer<typeof insertPlatformFeeSchema>;
+export type MemberWallet = typeof memberWallets.$inferSelect;
+export type InsertMemberWallet = z.infer<typeof insertMemberWalletSchema>;
+export type WalletTransaction = typeof walletTransactions.$inferSelect;
+export type InsertWalletTransaction = z.infer<typeof insertWalletTransactionSchema>;
+export type WithdrawalRequest = typeof withdrawalRequests.$inferSelect;
+export type InsertWithdrawalRequest = z.infer<typeof insertWithdrawalRequestSchema>;
 
 export type LeagueWithMembers = League & { members: (LeagueMember & { user: typeof users.$inferSelect })[] };

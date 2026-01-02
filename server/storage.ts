@@ -1,6 +1,7 @@
 import { db } from "./db";
 import { 
   users, leagues, leagueMembers, payments, payouts, weeklyScores, platformFees,
+  memberWallets, walletTransactions, withdrawalRequests,
   type User,
   type League, type InsertLeague,
   type LeagueMember, type InsertLeagueMember,
@@ -8,6 +9,9 @@ import {
   type Payout, type InsertPayout,
   type WeeklyScore, type InsertWeeklyScore,
   type PlatformFee, type InsertPlatformFee,
+  type MemberWallet, type InsertMemberWallet,
+  type WalletTransaction, type InsertWalletTransaction,
+  type WithdrawalRequest, type InsertWithdrawalRequest,
   type LeagueWithMembers
 } from "@shared/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
@@ -52,6 +56,23 @@ export interface IStorage {
   createPlatformFee(fee: InsertPlatformFee): Promise<PlatformFee>;
   updatePlatformFeeStatus(id: number, status: string, stripeTransferId?: string): Promise<void>;
   getTotalPlatformFees(): Promise<string>;
+
+  // Member wallets
+  getOrCreateWallet(leagueId: number, userId: string): Promise<MemberWallet>;
+  getMemberWallet(leagueId: number, userId: string): Promise<MemberWallet | undefined>;
+  getMemberWalletById(walletId: number): Promise<MemberWallet | undefined>;
+  getUserWallets(userId: string): Promise<MemberWallet[]>;
+  getLeagueWallets(leagueId: number): Promise<MemberWallet[]>;
+  creditWallet(walletId: number, amount: string, sourceType: string, sourceId: number | null, description: string): Promise<WalletTransaction>;
+  debitWallet(walletId: number, amount: string, sourceType: string, sourceId: number | null, description: string): Promise<WalletTransaction>;
+  getWalletTransactions(walletId: number): Promise<WalletTransaction[]>;
+  getLeagueTreasury(leagueId: number): Promise<{ totalInflow: string; totalOutflow: string; availableBalance: string }>;
+
+  // Withdrawal requests
+  createWithdrawalRequest(request: InsertWithdrawalRequest): Promise<WithdrawalRequest>;
+  getWithdrawalRequest(id: number): Promise<WithdrawalRequest | undefined>;
+  getUserWithdrawals(userId: string): Promise<WithdrawalRequest[]>;
+  updateWithdrawalStatus(id: number, status: string, stripeTransferId?: string, failureReason?: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -255,6 +276,157 @@ export class DatabaseStorage implements IStorage {
       sql`SELECT * FROM stripe.subscriptions WHERE id = ${subscriptionId}`
     );
     return result.rows[0] || null;
+  }
+
+  // Member wallet methods
+  async getOrCreateWallet(leagueId: number, userId: string): Promise<MemberWallet> {
+    const existing = await this.getMemberWallet(leagueId, userId);
+    if (existing) return existing;
+
+    const [newWallet] = await db.insert(memberWallets).values({
+      leagueId,
+      userId,
+      availableBalance: "0",
+      pendingBalance: "0",
+      totalEarnings: "0",
+      totalWithdrawn: "0"
+    }).returning();
+    return newWallet;
+  }
+
+  async getMemberWallet(leagueId: number, userId: string): Promise<MemberWallet | undefined> {
+    const [wallet] = await db.select().from(memberWallets)
+      .where(and(eq(memberWallets.leagueId, leagueId), eq(memberWallets.userId, userId)));
+    return wallet;
+  }
+
+  async getMemberWalletById(walletId: number): Promise<MemberWallet | undefined> {
+    const [wallet] = await db.select().from(memberWallets).where(eq(memberWallets.id, walletId));
+    return wallet;
+  }
+
+  async getUserWallets(userId: string): Promise<MemberWallet[]> {
+    return await db.select().from(memberWallets).where(eq(memberWallets.userId, userId));
+  }
+
+  async getLeagueWallets(leagueId: number): Promise<MemberWallet[]> {
+    return await db.select().from(memberWallets).where(eq(memberWallets.leagueId, leagueId));
+  }
+
+  async creditWallet(walletId: number, amount: string, sourceType: string, sourceId: number | null, description: string): Promise<WalletTransaction> {
+    const wallet = await this.getMemberWalletById(walletId);
+    if (!wallet) throw new Error("Wallet not found");
+
+    const newBalance = (Number(wallet.availableBalance) + Number(amount)).toFixed(2);
+    const newTotalEarnings = (Number(wallet.totalEarnings) + Number(amount)).toFixed(2);
+
+    await db.update(memberWallets).set({
+      availableBalance: newBalance,
+      totalEarnings: newTotalEarnings,
+      updatedAt: new Date()
+    }).where(eq(memberWallets.id, walletId));
+
+    const [transaction] = await db.insert(walletTransactions).values({
+      walletId,
+      leagueId: wallet.leagueId,
+      userId: wallet.userId,
+      type: 'credit',
+      amount,
+      sourceType,
+      sourceId,
+      description,
+      balanceAfter: newBalance
+    }).returning();
+    return transaction;
+  }
+
+  async debitWallet(walletId: number, amount: string, sourceType: string, sourceId: number | null, description: string): Promise<WalletTransaction> {
+    const wallet = await this.getMemberWalletById(walletId);
+    if (!wallet) throw new Error("Wallet not found");
+
+    const currentBalance = Number(wallet.availableBalance);
+    if (currentBalance < Number(amount)) throw new Error("Insufficient balance");
+
+    const newBalance = (currentBalance - Number(amount)).toFixed(2);
+    const newTotalWithdrawn = (Number(wallet.totalWithdrawn) + Number(amount)).toFixed(2);
+
+    await db.update(memberWallets).set({
+      availableBalance: newBalance,
+      totalWithdrawn: newTotalWithdrawn,
+      updatedAt: new Date()
+    }).where(eq(memberWallets.id, walletId));
+
+    const [transaction] = await db.insert(walletTransactions).values({
+      walletId,
+      leagueId: wallet.leagueId,
+      userId: wallet.userId,
+      type: 'debit',
+      amount,
+      sourceType,
+      sourceId,
+      description,
+      balanceAfter: newBalance
+    }).returning();
+    return transaction;
+  }
+
+  async getWalletTransactions(walletId: number): Promise<WalletTransaction[]> {
+    return await db.select().from(walletTransactions)
+      .where(eq(walletTransactions.walletId, walletId))
+      .orderBy(desc(walletTransactions.createdAt));
+  }
+
+  async getLeagueTreasury(leagueId: number): Promise<{ totalInflow: string; totalOutflow: string; availableBalance: string }> {
+    const [inflow] = await db.select({
+      total: sql<string>`COALESCE(SUM(amount), 0)`
+    }).from(payments).where(and(eq(payments.leagueId, leagueId), eq(payments.status, 'completed')));
+
+    const [outflow] = await db.select({
+      total: sql<string>`COALESCE(SUM(amount), 0)`
+    }).from(payouts).where(and(eq(payouts.leagueId, leagueId), eq(payouts.status, 'paid')));
+
+    const totalIn = Number(inflow.total || 0);
+    const totalOut = Number(outflow.total || 0);
+
+    return {
+      totalInflow: inflow.total || "0",
+      totalOutflow: outflow.total || "0",
+      availableBalance: (totalIn - totalOut).toFixed(2)
+    };
+  }
+
+  // Withdrawal request methods
+  async createWithdrawalRequest(request: InsertWithdrawalRequest): Promise<WithdrawalRequest> {
+    const [newRequest] = await db.insert(withdrawalRequests).values({
+      walletId: request.walletId,
+      leagueId: request.leagueId,
+      userId: request.userId,
+      amount: request.amount,
+      payoutType: request.payoutType || 'standard',
+      feeAmount: request.feeAmount || "0",
+      netAmount: request.netAmount
+    }).returning();
+    return newRequest;
+  }
+
+  async getWithdrawalRequest(id: number): Promise<WithdrawalRequest | undefined> {
+    const [request] = await db.select().from(withdrawalRequests).where(eq(withdrawalRequests.id, id));
+    return request;
+  }
+
+  async getUserWithdrawals(userId: string): Promise<WithdrawalRequest[]> {
+    return await db.select().from(withdrawalRequests)
+      .where(eq(withdrawalRequests.userId, userId))
+      .orderBy(desc(withdrawalRequests.requestedAt));
+  }
+
+  async updateWithdrawalStatus(id: number, status: string, stripeTransferId?: string, failureReason?: string): Promise<void> {
+    await db.update(withdrawalRequests).set({
+      status,
+      stripeTransferId: stripeTransferId || null,
+      failureReason: failureReason || null,
+      processedAt: status === 'completed' || status === 'failed' ? new Date() : null
+    }).where(eq(withdrawalRequests.id, id));
   }
 }
 
