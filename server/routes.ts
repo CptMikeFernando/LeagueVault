@@ -981,6 +981,39 @@ export async function registerRoutes(
     }
   });
 
+  // === TWILIO TEST ===
+  app.post("/api/test-twilio", isAuthenticated, async (req: any, res) => {
+    try {
+      const { phoneNumber } = req.body;
+      if (!phoneNumber) {
+        return res.status(400).json({ message: "Phone number is required" });
+      }
+      
+      const { sendSMS, isTwilioConfigured, getTwilioFromPhoneNumber } = await import('./twilio');
+      const configured = await isTwilioConfigured();
+      console.log('Twilio test - configured:', configured);
+      
+      if (!configured) {
+        return res.status(500).json({ message: "Twilio is not configured", configured: false });
+      }
+      
+      const fromNumber = await getTwilioFromPhoneNumber();
+      console.log('Twilio test - from number:', fromNumber);
+      
+      const result = await sendSMS(phoneNumber, "Test message from LeagueVault - SMS is working!");
+      console.log('Twilio test - result:', result);
+      
+      res.json({ 
+        configured,
+        fromNumber,
+        result 
+      });
+    } catch (err: any) {
+      console.error("Twilio test error:", err);
+      res.status(500).json({ message: err.message, stack: err.stack });
+    }
+  });
+
   // === ADMIN ===
   // Middleware to check admin status
   const isAdmin = async (req: any, res: any, next: any) => {
@@ -1450,32 +1483,48 @@ export async function registerRoutes(
       });
 
       // Send invite via SMS if phone
+      console.log('=== INVITE SMS DEBUG START ===');
+      console.log('Contact type:', contactType);
+      console.log('Contact value:', contactValue);
+      
       if (contactType === 'phone') {
-        const { sendSMS, isTwilioConfigured } = await import('./twilio');
-        const twilioReady = await isTwilioConfigured();
-        console.log('Twilio configured for invite:', twilioReady);
+        console.log('Attempting to send SMS invite...');
+        const { sendSMS, isTwilioConfigured, getTwilioFromPhoneNumber } = await import('./twilio');
         
-        if (twilioReady) {
-          const baseUrl = process.env.REPLIT_DEV_DOMAIN 
-            ? `https://${process.env.REPLIT_DEV_DOMAIN}` 
-            : 'https://your-app.replit.app';
-          const leagueUrl = `${baseUrl}/leagues/${leagueId}`;
-          const message = `Hey, nerd. You still haven't paid your dues for ${league.name}. Pay up or shut up.\n\nJoin or log in here: ${leagueUrl}`;
+        try {
+          const twilioReady = await isTwilioConfigured();
+          console.log('Twilio configured:', twilioReady);
           
-          console.log('Sending invite SMS to:', contactValue);
-          const smsResult = await sendSMS(contactValue, message);
-          console.log('SMS result:', smsResult);
-          
-          if (smsResult.success) {
-            await storage.updateInviteStatus(invite.id, 'sent');
+          if (twilioReady) {
+            const fromNumber = await getTwilioFromPhoneNumber();
+            console.log('Twilio from number:', fromNumber);
+            
+            const baseUrl = process.env.REPLIT_DEV_DOMAIN 
+              ? `https://${process.env.REPLIT_DEV_DOMAIN}` 
+              : 'https://your-app.replit.app';
+            const leagueUrl = `${baseUrl}/leagues/${leagueId}`;
+            const message = `Hey, nerd. You still haven't paid your dues for ${league.name}. Pay up or shut up.\n\nJoin or log in here: ${leagueUrl}`;
+            
+            console.log('Sending invite SMS to:', contactValue);
+            console.log('Message:', message);
+            const smsResult = await sendSMS(contactValue, message);
+            console.log('SMS result:', JSON.stringify(smsResult));
+            
+            if (smsResult.success) {
+              await storage.updateInviteStatus(invite.id, 'sent');
+              console.log('Invite status updated to sent');
+            } else {
+              console.error('Failed to send invite SMS:', smsResult.error);
+            }
           } else {
-            console.error('Failed to send invite SMS:', smsResult.error);
+            console.warn('Twilio not configured - invite SMS not sent');
           }
-        } else {
-          console.warn('Twilio not configured - invite SMS not sent');
+        } catch (smsError: any) {
+          console.error('SMS sending error:', smsError.message, smsError.stack);
         }
       }
-
+      
+      console.log('=== INVITE SMS DEBUG END ===');
       res.status(201).json(invite);
     } catch (err) {
       console.error("Error creating invite:", err);
