@@ -44,11 +44,24 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export default function LeagueDetail() {
   const { id } = useParams<{ id: string }>();
-  const leagueId = parseInt(id);
-  const { data: league, isLoading } = useLeague(leagueId);
+  const leagueId = id ? parseInt(id) : 0;
+  const { data: league, isLoading, error } = useLeague(leagueId);
   const { user } = useAuth();
 
-  if (isLoading || !league) {
+  if (!id || leagueId <= 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16">
+        <AlertCircle className="h-12 w-12 text-muted-foreground mb-4" />
+        <h2 className="text-xl font-bold mb-2">Invalid League</h2>
+        <p className="text-muted-foreground">No league ID provided.</p>
+        <Link href="/dashboard">
+          <Button className="mt-4">Back to Dashboard</Button>
+        </Link>
+      </div>
+    );
+  }
+
+  if (isLoading) {
     return (
       <div className="space-y-6">
         <Skeleton className="h-12 w-1/3" />
@@ -58,6 +71,19 @@ export default function LeagueDetail() {
           <Skeleton className="h-32" />
         </div>
         <Skeleton className="h-96" />
+      </div>
+    );
+  }
+
+  if (error || !league) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16">
+        <AlertCircle className="h-12 w-12 text-destructive mb-4" />
+        <h2 className="text-xl font-bold mb-2">League Not Found</h2>
+        <p className="text-muted-foreground">This league doesn't exist or you don't have access to it.</p>
+        <Link href="/dashboard">
+          <Button className="mt-4">Back to Dashboard</Button>
+        </Link>
       </div>
     );
   }
