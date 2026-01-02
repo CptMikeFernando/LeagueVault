@@ -256,7 +256,7 @@ export default function LeagueDetail() {
                 </CardContent>
               </Card>
 
-              <PayoutCalculatorCard league={league} />
+              {isCommissioner && <PayoutCalculatorCard league={league} />}
             </div>
           </div>
         </TabsContent>
