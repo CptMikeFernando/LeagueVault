@@ -176,88 +176,91 @@ export default function LeagueDetail() {
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-2 flex flex-col gap-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>My Status</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {currentMember ? (
-                    <div className="flex items-center justify-between p-4 bg-muted/30 rounded-xl border">
-                      <div className="flex items-center gap-4">
-                        <div className={`p-3 rounded-full ${currentMember.paidStatus === 'paid' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                          {currentMember.paidStatus === 'paid' ? <Trophy className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
-                        </div>
-                        <div>
-                          <p className="font-medium">Team: {currentMember.teamName}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {currentMember.paidStatus === 'paid' ? "You're all paid up!" : `Dues owed: $${league.settings?.entryFee || league.settings?.seasonDues || 0}`}
-                          </p>
-                        </div>
-                      </div>
-                      {currentMember.paidStatus !== 'paid' && (
-                         <PayDuesDialog league={league} userId={user!.id} amount={league.settings?.entryFee || league.settings?.seasonDues || 0} />
-                      )}
+          {/* My Status - Full Width */}
+          <Card>
+            <CardHeader>
+              <CardTitle>My Status</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {currentMember ? (
+                <div className="flex items-center justify-between p-4 bg-muted/30 rounded-xl border">
+                  <div className="flex items-center gap-4">
+                    <div className={`p-3 rounded-full ${currentMember.paidStatus === 'paid' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                      {currentMember.paidStatus === 'paid' ? <Trophy className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
                     </div>
-                  ) : (
-                    <p className="text-muted-foreground">You are not a member of this league.</p>
+                    <div>
+                      <p className="font-medium">Team: {currentMember.teamName}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {currentMember.paidStatus === 'paid' ? "You're all paid up!" : `Dues owed: $${league.settings?.entryFee || league.settings?.seasonDues || 0}`}
+                      </p>
+                    </div>
+                  </div>
+                  {currentMember.paidStatus !== 'paid' && (
+                     <PayDuesDialog league={league} userId={user!.id} amount={league.settings?.entryFee || league.settings?.seasonDues || 0} />
                   )}
-                </CardContent>
-              </Card>
+                </div>
+              ) : (
+                <p className="text-muted-foreground">You are not a member of this league.</p>
+              )}
+            </CardContent>
+          </Card>
 
+          {/* Row: Message Board + League Info - aligned at bottom */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-end">
+            <div className="lg:col-span-2">
               <MessageBoard leagueId={league.id} />
-              
+            </div>
+            <Card>
+              <CardHeader>
+                <CardTitle>League Info</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex justify-between text-sm pb-2 border-b">
+                  <span className="text-muted-foreground">Members</span>
+                  <span className="font-mono font-medium" data-testid="text-member-count">{league.members?.length || 0} teams</span>
+                </div>
+                <div className="flex justify-between text-sm pb-2 border-b">
+                  <span className="text-muted-foreground">Entry Fee</span>
+                  <span className="font-mono font-medium">${league.settings?.entryFee || league.settings?.seasonDues || 0}</span>
+                </div>
+                <div className="bg-muted p-3 rounded-md text-sm space-y-2">
+                  <p className="font-medium text-foreground">Season Payouts:</p>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">1st Place</span>
+                    <span className="font-mono font-medium text-foreground">${league.settings?.firstPlacePayout || 0}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">2nd Place</span>
+                    <span className="font-mono font-medium text-foreground">${league.settings?.secondPlacePayout || 0}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">3rd Place</span>
+                    <span className="font-mono font-medium text-foreground">${league.settings?.thirdPlacePayout || 0}</span>
+                  </div>
+                </div>
+                <div className="bg-muted p-3 rounded-md text-sm space-y-2">
+                  <p className="font-medium text-foreground">Weekly:</p>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">HPS Prize</span>
+                    <span className="font-mono font-medium text-green-600">+${league.settings?.weeklyHighScorePrize || league.settings?.weeklyPayoutAmount || 0}</span>
+                  </div>
+                  {league.settings?.weeklyLowScoreFeeEnabled && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">LPS Fee</span>
+                      <span className="font-mono font-medium text-red-600">-${league.settings?.weeklyLowScoreFee || 0}</span>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Row: Sports Scores + Budget Forecast - aligned at bottom */}
+          <div className={`grid grid-cols-1 ${isCommissioner ? 'lg:grid-cols-3' : ''} gap-6 items-end`}>
+            <div className={isCommissioner ? 'lg:col-span-2' : ''}>
               <SportsScoresWidget />
             </div>
-
-            <div className="flex flex-col gap-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>League Info</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex justify-between text-sm pb-2 border-b">
-                    <span className="text-muted-foreground">Members</span>
-                    <span className="font-mono font-medium" data-testid="text-member-count">{league.members?.length || 0} teams</span>
-                  </div>
-                  <div className="flex justify-between text-sm pb-2 border-b">
-                    <span className="text-muted-foreground">Entry Fee</span>
-                    <span className="font-mono font-medium">${league.settings?.entryFee || league.settings?.seasonDues || 0}</span>
-                  </div>
-                  <div className="bg-muted p-3 rounded-md text-sm space-y-2">
-                    <p className="font-medium text-foreground">Season Payouts:</p>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">1st Place</span>
-                      <span className="font-mono font-medium text-foreground">${league.settings?.firstPlacePayout || 0}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">2nd Place</span>
-                      <span className="font-mono font-medium text-foreground">${league.settings?.secondPlacePayout || 0}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">3rd Place</span>
-                      <span className="font-mono font-medium text-foreground">${league.settings?.thirdPlacePayout || 0}</span>
-                    </div>
-                  </div>
-                  <div className="bg-muted p-3 rounded-md text-sm space-y-2">
-                    <p className="font-medium text-foreground">Weekly:</p>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">HPS Prize</span>
-                      <span className="font-mono font-medium text-green-600">+${league.settings?.weeklyHighScorePrize || league.settings?.weeklyPayoutAmount || 0}</span>
-                    </div>
-                    {league.settings?.weeklyLowScoreFeeEnabled && (
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">LPS Fee</span>
-                        <span className="font-mono font-medium text-red-600">-${league.settings?.weeklyLowScoreFee || 0}</span>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-
-              {isCommissioner && <PayoutCalculatorCard league={league} />}
-            </div>
+            {isCommissioner && <PayoutCalculatorCard league={league} />}
           </div>
         </TabsContent>
 
