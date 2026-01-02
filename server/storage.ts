@@ -42,6 +42,7 @@ export interface IStorage {
   getUserLeagues(userId: string): Promise<League[]>;
   updateLeagueTotalDues(id: number, amount: number): Promise<void>;
   updateLeagueSettings(id: number, settings: any): Promise<void>;
+  updateLeagueName(id: number, name: string): Promise<void>;
 
   addLeagueMember(member: InsertLeagueMember): Promise<LeagueMember>;
   getLeagueMember(leagueId: number, userId: string): Promise<LeagueMember | undefined>;
@@ -205,6 +206,12 @@ export class DatabaseStorage implements IStorage {
   async updateLeagueSettings(id: number, settings: any): Promise<void> {
     await db.update(leagues)
       .set({ settings })
+      .where(eq(leagues.id, id));
+  }
+
+  async updateLeagueName(id: number, name: string): Promise<void> {
+    await db.update(leagues)
+      .set({ name })
       .where(eq(leagues.id, id));
   }
 

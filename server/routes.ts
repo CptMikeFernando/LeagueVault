@@ -1649,6 +1649,38 @@ export async function registerRoutes(
     }
   });
 
+  // === UPDATE LEAGUE NAME ===
+  const updateLeagueNameSchema = z.object({
+    name: z.string().min(1, "League name is required").max(100, "League name too long")
+  });
+
+  app.patch("/api/leagues/:id/name", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const leagueId = Number(req.params.id);
+
+      const parseResult = updateLeagueNameSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ message: "Invalid request data", errors: parseResult.error.flatten() });
+      }
+
+      const league = await storage.getLeague(leagueId);
+      if (!league) {
+        return res.status(404).json({ message: "League not found" });
+      }
+
+      if (league.commissionerId !== userId) {
+        return res.status(403).json({ message: "Only commissioners can update league name" });
+      }
+
+      await storage.updateLeagueName(leagueId, parseResult.data.name);
+      res.json({ success: true });
+    } catch (err) {
+      console.error("Error updating league name:", err);
+      res.status(500).json({ message: "Failed to update league name" });
+    }
+  });
+
   // === TRANSFER COMMISSIONER ===
   app.post("/api/leagues/:id/transfer-commissioner", isAuthenticated, async (req: any, res) => {
     try {

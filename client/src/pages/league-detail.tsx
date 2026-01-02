@@ -124,6 +124,7 @@ export default function LeagueDetail() {
         <div>
           <div className="flex items-center gap-3 mb-1">
             <h1 className="text-3xl font-bold font-display tracking-tight">{league.name}</h1>
+            {isCommissioner && <EditLeagueNameDialog leagueId={league.id} currentName={league.name} />}
             <Badge variant="outline" className="font-mono text-xs">{league.seasonYear}</Badge>
           </div>
           <p className="text-muted-foreground flex items-center gap-2">
@@ -2045,6 +2046,69 @@ function EditMemberDialog({ leagueId, member }: { leagueId: number; member: any 
             data-testid="button-save-member"
           >
             {updateMember.isPending ? 'Saving...' : 'Save Changes'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function EditLeagueNameDialog({ leagueId, currentName }: { leagueId: number; currentName: string }) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState(currentName);
+  const { toast } = useToast();
+
+  const updateName = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest('PATCH', `/api/leagues/${leagueId}/name`, { name: name.trim() });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || 'Failed to update league name');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/leagues', leagueId] });
+      toast({ title: "League updated", description: "League name has been changed." });
+      setOpen(false);
+    },
+    onError: (err: any) => {
+      toast({ title: "Failed to update", description: err.message, variant: "destructive" });
+    }
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={(isOpen) => {
+      setOpen(isOpen);
+      if (isOpen) setName(currentName);
+    }}>
+      <DialogTrigger asChild>
+        <Button size="icon" variant="ghost" data-testid="button-edit-league-name">
+          <Pencil className="w-4 h-4" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Edit League Name</DialogTitle>
+          <DialogDescription>Change the name of your league.</DialogDescription>
+        </DialogHeader>
+        <div className="py-4">
+          <Label>League Name</Label>
+          <Input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="League Name"
+            data-testid="input-edit-league-name"
+          />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+          <Button
+            onClick={() => updateName.mutate()}
+            disabled={!name.trim() || updateName.isPending}
+            data-testid="button-save-league-name"
+          >
+            {updateName.isPending ? 'Saving...' : 'Save'}
           </Button>
         </DialogFooter>
       </DialogContent>
