@@ -1,51 +1,44 @@
 import { db } from "./db";
 import { 
   users, leagues, leagueMembers, payments, payouts, weeklyScores,
-  type User, type InsertUser,
+  type User,
   type League, type InsertLeague,
   type LeagueMember, type InsertLeagueMember,
-  type Payment, type Payout, type WeeklyScore,
+  type Payment, type InsertPayment,
+  type Payout, type InsertPayout,
+  type WeeklyScore, type InsertWeeklyScore,
   type LeagueWithMembers
 } from "@shared/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { authStorage } from "./replit_integrations/auth/storage";
 
 export interface IStorage {
-  // Auth methods (delegated)
   getUser(id: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
 
-  // League methods
   createLeague(league: InsertLeague): Promise<League>;
   getLeague(id: number): Promise<LeagueWithMembers | undefined>;
   getUserLeagues(userId: string): Promise<League[]>;
   updateLeagueTotalDues(id: number, amount: number): Promise<void>;
+  updateLeagueSettings(id: number, settings: any): Promise<void>;
 
-  // Member methods
   addLeagueMember(member: InsertLeagueMember): Promise<LeagueMember>;
   getLeagueMember(leagueId: number, userId: string): Promise<LeagueMember | undefined>;
   updateMemberStatus(id: number, status: string): Promise<void>;
 
-  // Financial methods
-  createPayment(payment: any): Promise<Payment>;
-  createPayout(payout: any): Promise<Payout>;
+  createPayment(payment: InsertPayment & { userId: string; status: string }): Promise<Payment>;
+  createPayout(payout: InsertPayout & { status: string }): Promise<Payout>;
   getLeagueTransactions(leagueId: number): Promise<{ payments: Payment[], payouts: Payout[] }>;
   
-  // Score methods
-  addWeeklyScore(score: any): Promise<WeeklyScore>;
+  addWeeklyScore(score: InsertWeeklyScore): Promise<WeeklyScore>;
   getWeeklyScores(leagueId: number, week: number): Promise<WeeklyScore[]>;
+  getHighestScorerForWeek(leagueId: number, week: number): Promise<WeeklyScore | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
-  // Auth delegation
   async getUser(id: string): Promise<User | undefined> {
     return authStorage.getUser(id);
   }
-  async createUser(user: InsertUser): Promise<User> {
-    return authStorage.upsertUser(user as any); // Type assertion needed due to schema differences if any
-  }
 
-  // Leagues
   async createLeague(league: InsertLeague): Promise<League> {
     const [newLeague] = await db.insert(leagues).values(league).returning();
     return newLeague;
@@ -66,22 +59,6 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUserLeagues(userId: string): Promise<League[]> {
-    // Find all memberships for the user
-    const memberships = await db.select().from(leagueMembers).where(eq(leagueMembers.userId, userId));
-    if (memberships.length === 0) return [];
-    
-    // Get the leagues
-    const leagueIds = memberships.map(m => m.leagueId);
-    // In a real app we'd use 'inArray' but for simplicity in this snippet:
-    const userLeagues = await db.select().from(leagues).where(
-        // @ts-ignore - straightforward implementation
-        sql`${leagues.id} IN ${leagueIds}`
-    );
-    // Note: Drizzle's `inArray` is better, but avoiding import complexity for this quick implementation
-    // Actually, let's just do it cleanly with promise.all or multiple queries if list is small.
-    // For now, let's fix the implementation to be correct with Drizzle `inArray`.
-    
-    // Re-implementation with relations query which is cleaner
     const result = await db.query.leagueMembers.findMany({
         where: eq(leagueMembers.userId, userId),
         with: {
@@ -93,16 +70,17 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateLeagueTotalDues(id: number, amount: number): Promise<void> {
-    // Increment implementation would be better, but simple update for now
-    const league = await this.getLeague(id);
-    if (!league) return;
-    const current = Number(league.totalDues);
     await db.update(leagues)
-      .set({ totalDues: String(current + amount) })
+      .set({ totalDues: sql`COALESCE(${leagues.totalDues}, 0) + ${amount}` })
       .where(eq(leagues.id, id));
   }
 
-  // Members
+  async updateLeagueSettings(id: number, settings: any): Promise<void> {
+    await db.update(leagues)
+      .set({ settings })
+      .where(eq(leagues.id, id));
+  }
+
   async addLeagueMember(member: InsertLeagueMember): Promise<LeagueMember> {
     const [newMember] = await db.insert(leagueMembers).values(member).returning();
     return newMember;
@@ -118,14 +96,26 @@ export class DatabaseStorage implements IStorage {
     await db.update(leagueMembers).set({ paidStatus: status }).where(eq(leagueMembers.id, id));
   }
 
-  // Financials
-  async createPayment(payment: any): Promise<Payment> {
-    const [newPayment] = await db.insert(payments).values(payment).returning();
+  async createPayment(payment: InsertPayment & { userId: string; status: string }): Promise<Payment> {
+    const [newPayment] = await db.insert(payments).values({
+      leagueId: payment.leagueId,
+      userId: payment.userId,
+      amount: payment.amount,
+      status: payment.status,
+      stripePaymentIntentId: payment.stripePaymentIntentId
+    }).returning();
     return newPayment;
   }
 
-  async createPayout(payout: any): Promise<Payout> {
-    const [newPayout] = await db.insert(payouts).values(payout).returning();
+  async createPayout(payout: InsertPayout & { status: string }): Promise<Payout> {
+    const [newPayout] = await db.insert(payouts).values({
+      leagueId: payout.leagueId,
+      userId: payout.userId,
+      amount: payout.amount,
+      reason: payout.reason,
+      week: payout.week,
+      status: payout.status
+    }).returning();
     return newPayout;
   }
 
@@ -135,9 +125,13 @@ export class DatabaseStorage implements IStorage {
     return { payments: leaguePayments, payouts: leaguePayouts };
   }
 
-  // Scores
-  async addWeeklyScore(score: any): Promise<WeeklyScore> {
-    const [newScore] = await db.insert(weeklyScores).values(score).returning();
+  async addWeeklyScore(score: InsertWeeklyScore): Promise<WeeklyScore> {
+    const [newScore] = await db.insert(weeklyScores).values({
+      leagueId: score.leagueId,
+      userId: score.userId,
+      week: score.week,
+      score: score.score
+    }).returning();
     return newScore;
   }
 
@@ -145,6 +139,26 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(weeklyScores)
       .where(and(eq(weeklyScores.leagueId, leagueId), eq(weeklyScores.week, week)))
       .orderBy(desc(weeklyScores.score));
+  }
+
+  async getHighestScorerForWeek(leagueId: number, week: number): Promise<WeeklyScore | undefined> {
+    const scores = await this.getWeeklyScores(leagueId, week);
+    return scores.length > 0 ? scores[0] : undefined;
+  }
+
+  // Stripe-related storage methods
+  async getProduct(productId: string) {
+    const result = await db.execute(
+      sql`SELECT * FROM stripe.products WHERE id = ${productId}`
+    );
+    return result.rows[0] || null;
+  }
+
+  async getSubscription(subscriptionId: string) {
+    const result = await db.execute(
+      sql`SELECT * FROM stripe.subscriptions WHERE id = ${subscriptionId}`
+    );
+    return result.rows[0] || null;
   }
 }
 

@@ -135,7 +135,10 @@ export type InsertLeague = z.infer<typeof insertLeagueSchema>;
 export type LeagueMember = typeof leagueMembers.$inferSelect;
 export type InsertLeagueMember = z.infer<typeof insertLeagueMemberSchema>;
 export type Payment = typeof payments.$inferSelect;
+export type InsertPayment = z.infer<typeof insertPaymentSchema>;
 export type Payout = typeof payouts.$inferSelect;
+export type InsertPayout = z.infer<typeof insertPayoutSchema>;
 export type WeeklyScore = typeof weeklyScores.$inferSelect;
+export type InsertWeeklyScore = z.infer<typeof insertWeeklyScoreSchema>;
 
 export type LeagueWithMembers = League & { members: (LeagueMember & { user: typeof users.$inferSelect })[] };

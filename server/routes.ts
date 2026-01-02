@@ -1,9 +1,10 @@
 import type { Express } from "express";
-import { createServer, type Server } from "http";
+import type { Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth";
+import { getStripePublishableKey, getUncachableStripeClient } from "./stripeClient";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -16,9 +17,14 @@ export async function registerRoutes(
 
   // === LEAGUES ===
   app.get(api.leagues.list.path, isAuthenticated, async (req: any, res) => {
-    const userId = req.user.claims.sub;
-    const leagues = await storage.getUserLeagues(userId);
-    res.json(leagues);
+    try {
+      const userId = req.user.claims.sub;
+      const leagues = await storage.getUserLeagues(userId);
+      res.json(leagues);
+    } catch (err) {
+      console.error("Error fetching leagues:", err);
+      res.status(500).json({ message: "Failed to fetch leagues" });
+    }
   });
 
   app.post(api.leagues.create.path, isAuthenticated, async (req: any, res) => {
@@ -43,6 +49,7 @@ export async function registerRoutes(
 
       res.status(201).json(league);
     } catch (err) {
+      console.error("Error creating league:", err);
       if (err instanceof z.ZodError) {
         return res.status(400).json({ message: err.errors[0].message });
       }
@@ -51,91 +58,225 @@ export async function registerRoutes(
   });
 
   app.get(api.leagues.get.path, isAuthenticated, async (req, res) => {
-    const league = await storage.getLeague(Number(req.params.id));
-    if (!league) return res.status(404).json({ message: "League not found" });
-    res.json(league);
-  });
-
-  // === INTEGRATIONS (Mock) ===
-  app.post(api.leagues.syncPlatform.path, isAuthenticated, async (req, res) => {
-      // Mock integration for ESPN/Yahoo
-      const { platform, leagueUrl } = req.body;
+    try {
+      const league = await storage.getLeague(Number(req.params.id));
+      if (!league) return res.status(404).json({ message: "League not found" });
       
-      // Simulate delay
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Get transaction history for the league as well
+      const transactions = await storage.getLeagueTransactions(league.id);
       
       res.json({
-          success: true,
-          data: {
-              name: `${platform.toUpperCase()} Fantasy League`,
-              seasonYear: 2025,
-              externalId: "mock-ext-123"
-          }
+        ...league,
+        payments: transactions.payments,
+        payouts: transactions.payouts
       });
+    } catch (err) {
+      console.error("Error fetching league:", err);
+      res.status(500).json({ message: "Failed to fetch league" });
+    }
+  });
+
+  app.post(api.leagues.join.path, isAuthenticated, async (req: any, res) => {
+    try {
+      const { teamName } = req.body;
+      const userId = req.user.claims.sub;
+      const leagueId = Number(req.params.id);
+
+      // Check if already a member
+      const existing = await storage.getLeagueMember(leagueId, userId);
+      if (existing) {
+        return res.status(400).json({ message: "Already a member of this league" });
+      }
+
+      const member = await storage.addLeagueMember({
+        leagueId,
+        userId,
+        role: 'member',
+        teamName: teamName || 'My Team',
+        paidStatus: 'unpaid'
+      });
+
+      res.status(201).json(member);
+    } catch (err) {
+      console.error("Error joining league:", err);
+      res.status(500).json({ message: "Failed to join league" });
+    }
+  });
+
+  // === INTEGRATIONS (Mock ESPN/Yahoo) ===
+  app.post(api.leagues.syncPlatform.path, isAuthenticated, async (req, res) => {
+    try {
+      const { platform, leagueUrl } = req.body;
+      
+      // Simulate API delay
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      // Mock response simulating ESPN/Yahoo data
+      res.json({
+        success: true,
+        data: {
+          name: `${platform.toUpperCase()} Fantasy League 2025`,
+          seasonYear: 2025,
+          externalId: `mock-${platform}-${Date.now()}`
+        }
+      });
+    } catch (err) {
+      console.error("Error syncing platform:", err);
+      res.status(500).json({ message: "Failed to sync platform" });
+    }
   });
 
   // === PAYMENTS ===
   app.post(api.payments.create.path, isAuthenticated, async (req: any, res) => {
     try {
-        const input = api.payments.create.input.parse(req.body);
-        const userId = req.user.claims.sub;
-        
-        // In a real app, this would verify the Stripe payment intent first
-        const payment = await storage.createPayment({
-            ...input,
-            userId,
-            status: 'completed' // Mock successful payment
-        });
+      const userId = req.user.claims.sub;
+      const { leagueId, amount } = req.body;
+      
+      // Create payment record
+      const payment = await storage.createPayment({
+        leagueId: Number(leagueId),
+        userId,
+        amount: String(amount),
+        status: 'completed',
+        stripePaymentIntentId: null
+      });
 
-        // Update member status
-        const member = await storage.getLeagueMember(input.leagueId, userId);
-        if (member) {
-            await storage.updateMemberStatus(member.id, 'paid');
-        }
+      // Update member status to paid
+      const member = await storage.getLeagueMember(Number(leagueId), userId);
+      if (member) {
+        await storage.updateMemberStatus(member.id, 'paid');
+      }
 
-        // Update league total
-        await storage.updateLeagueTotalDues(input.leagueId, Number(input.amount));
+      // Update league total funds
+      await storage.updateLeagueTotalDues(Number(leagueId), Number(amount));
 
-        res.status(201).json(payment);
+      res.status(201).json(payment);
     } catch (err) {
-        res.status(500).json({ message: "Payment failed" });
+      console.error("Error creating payment:", err);
+      res.status(500).json({ message: "Payment failed" });
     }
   });
 
   app.get(api.payments.history.path, isAuthenticated, async (req, res) => {
+    try {
       const history = await storage.getLeagueTransactions(Number(req.params.id));
       res.json(history);
+    } catch (err) {
+      console.error("Error fetching transactions:", err);
+      res.status(500).json({ message: "Failed to fetch transactions" });
+    }
   });
 
   // === PAYOUTS ===
   app.post(api.payouts.create.path, isAuthenticated, async (req: any, res) => {
-      const input = api.payouts.create.input.parse(req.body);
-      const league = await storage.getLeague(input.leagueId);
+    try {
+      const userId = req.user.claims.sub;
+      const { leagueId, userId: recipientId, amount, reason, week } = req.body;
       
       // Authorization check (only commissioner)
-      if (league?.commissionerId !== req.user.claims.sub) {
-          return res.status(403).json({ message: "Only commissioner can issue payouts" });
+      const league = await storage.getLeague(Number(leagueId));
+      if (!league) {
+        return res.status(404).json({ message: "League not found" });
+      }
+      
+      if (league.commissionerId !== userId) {
+        return res.status(403).json({ message: "Only commissioner can issue payouts" });
       }
 
       const payout = await storage.createPayout({
-          ...input,
-          status: 'pending' // Usually requires approval or processing time
+        leagueId: Number(leagueId),
+        userId: recipientId,
+        amount: String(amount),
+        reason,
+        week: week || null,
+        status: 'approved'
       });
       
       res.status(201).json(payout);
+    } catch (err) {
+      console.error("Error creating payout:", err);
+      res.status(500).json({ message: "Failed to create payout" });
+    }
   });
 
   // === SCORES ===
-  app.post(api.scores.update.path, isAuthenticated, async (req, res) => {
-      const input = api.scores.update.input.parse(req.body);
-      const score = await storage.addWeeklyScore(input);
-      res.status(201).json(score);
+  app.post(api.scores.update.path, isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const leagueId = Number(req.params.id);
+      const { userId: memberId, week, score } = req.body;
+      
+      // Authorization check (only commissioner)
+      const league = await storage.getLeague(leagueId);
+      if (!league) {
+        return res.status(404).json({ message: "League not found" });
+      }
+      
+      if (league.commissionerId !== userId) {
+        return res.status(403).json({ message: "Only commissioner can update scores" });
+      }
+
+      const newScore = await storage.addWeeklyScore({
+        leagueId,
+        userId: memberId,
+        week: Number(week),
+        score: String(score)
+      });
+      
+      res.status(201).json(newScore);
+    } catch (err) {
+      console.error("Error updating score:", err);
+      res.status(500).json({ message: "Failed to update score" });
+    }
+  });
+
+  // Get weekly scores for a league
+  app.get("/api/leagues/:id/scores/:week", isAuthenticated, async (req, res) => {
+    try {
+      const leagueId = Number(req.params.id);
+      const week = Number(req.params.week);
+      
+      const scores = await storage.getWeeklyScores(leagueId, week);
+      const highestScorer = scores.length > 0 ? scores[0] : null;
+      
+      res.json({ scores, highestScorer });
+    } catch (err) {
+      console.error("Error fetching scores:", err);
+      res.status(500).json({ message: "Failed to fetch scores" });
+    }
+  });
+
+  // === STRIPE ===
+  app.get("/api/stripe/key", async (req, res) => {
+    try {
+      const key = await getStripePublishableKey();
+      res.json({ publishableKey: key });
+    } catch (err) {
+      console.error("Error fetching Stripe key:", err);
+      res.status(500).json({ message: "Stripe not configured" });
+    }
+  });
+
+  app.post("/api/stripe/create-payment-intent", isAuthenticated, async (req: any, res) => {
+    try {
+      const { amount, leagueId } = req.body;
+      const stripe = await getUncachableStripeClient();
+      
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: Math.round(Number(amount) * 100), // Convert to cents
+        currency: 'usd',
+        metadata: {
+          leagueId: String(leagueId),
+          userId: req.user.claims.sub
+        }
+      });
+
+      res.json({ clientSecret: paymentIntent.client_secret });
+    } catch (err) {
+      console.error("Error creating payment intent:", err);
+      res.status(500).json({ message: "Failed to create payment" });
+    }
   });
 
   return httpServer;
-}
-
-// Seed data function (can be called if DB is empty)
-async function seedData() {
-    // Implementation skipped for now, relying on UI creation
 }

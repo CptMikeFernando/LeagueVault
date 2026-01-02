@@ -31,7 +31,8 @@ import {
   Trophy, 
   Settings,
   CreditCard,
-  Plus
+  Plus,
+  AlertCircle
 } from "lucide-react";
 import { useState } from "react";
 import { format } from "date-fns";
