@@ -15,6 +15,7 @@ export const leagues = pgTable("leagues", {
   platform: text("platform").notNull().default("custom"), // 'espn', 'yahoo', 'custom'
   externalLeagueId: text("external_league_id"),
   seasonYear: integer("season_year").notNull(),
+  startDate: timestamp("start_date"), // For pre-season payment reminders
   totalDues: decimal("total_dues", { precision: 10, scale: 2 }).notNull().default("0"),
   settings: jsonb("settings").$type<{
     entryFee: number;
@@ -56,6 +57,7 @@ export const leagueMembers = pgTable("league_members", {
   role: text("role").notNull().default("member"), // 'commissioner', 'member'
   teamName: text("team_name"),
   externalTeamId: text("external_team_id"), // ESPN/Yahoo team ID for score syncing
+  phoneNumber: text("phone_number"), // For SMS payment reminders
   paidStatus: text("paid_status").notNull().default("unpaid"), // 'paid', 'unpaid', 'partial'
   joinedAt: timestamp("joined_at").defaultNow(),
 });
@@ -276,8 +278,32 @@ export const lpsPaymentRequestsRelations = relations(lpsPaymentRequests, ({ one 
   }),
 }));
 
+// === PAYMENT REMINDERS ===
+export const paymentReminders = pgTable("payment_reminders", {
+  id: serial("id").primaryKey(),
+  leagueId: integer("league_id").notNull(),
+  userId: text("user_id").notNull(),
+  type: text("type").notNull(), // 'pre_season', 'weekly', 'final'
+  phoneNumber: text("phone_number"),
+  status: text("status").notNull().default("pending"), // 'pending', 'sent', 'failed'
+  sentAt: timestamp("sent_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const paymentRemindersRelations = relations(paymentReminders, ({ one }) => ({
+  league: one(leagues, {
+    fields: [paymentReminders.leagueId],
+    references: [leagues.id],
+  }),
+  user: one(users, {
+    fields: [paymentReminders.userId],
+    references: [users.id],
+  }),
+}));
+
 // === ZOD SCHEMAS ===
 export const insertLeagueSchema = createInsertSchema(leagues).omit({ id: true, createdAt: true, totalDues: true });
+export const insertPaymentReminderSchema = createInsertSchema(paymentReminders).omit({ id: true, createdAt: true, sentAt: true, status: true });
 export const insertLpsPaymentRequestSchema = createInsertSchema(lpsPaymentRequests).omit({ id: true, createdAt: true, paidAt: true, smsSent: true });
 export const insertLeagueMemberSchema = createInsertSchema(leagueMembers).omit({ id: true, joinedAt: true });
 export const insertPaymentSchema = createInsertSchema(payments).omit({ id: true, createdAt: true, status: true, stripePaymentIntentId: true });
@@ -309,5 +335,7 @@ export type WithdrawalRequest = typeof withdrawalRequests.$inferSelect;
 export type InsertWithdrawalRequest = z.infer<typeof insertWithdrawalRequestSchema>;
 export type LpsPaymentRequest = typeof lpsPaymentRequests.$inferSelect;
 export type InsertLpsPaymentRequest = z.infer<typeof insertLpsPaymentRequestSchema>;
+export type PaymentReminder = typeof paymentReminders.$inferSelect;
+export type InsertPaymentReminder = z.infer<typeof insertPaymentReminderSchema>;
 
 export type LeagueWithMembers = League & { members: (LeagueMember & { user: typeof users.$inferSelect })[] };

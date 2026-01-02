@@ -37,7 +37,9 @@ import {
   TrendingUp,
   TrendingDown,
   RefreshCw,
-  Save
+  Save,
+  Phone,
+  MessageSquare
 } from "lucide-react";
 import { useState } from "react";
 import { format } from "date-fns";
@@ -339,6 +341,18 @@ export default function LeagueDetail() {
                   </CardHeader>
                   <CardContent>
                     <SyncScoresForm league={league} />
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                       <Phone className="w-5 h-5 text-green-500" /> Payment Reminders
+                    </CardTitle>
+                    <CardDescription>Send SMS reminders to unpaid members.</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <SendRemindersForm league={league} />
                   </CardContent>
                 </Card>
              </div>
@@ -852,12 +866,23 @@ function SyncScoresForm({ league }: { league: any }) {
         <div className="text-xs space-y-1 p-3 bg-muted rounded-lg" data-testid="sync-automation-results">
           <p className="font-medium">Automation Results:</p>
           {lastResult.automation.hpsPayoutCreated ? (
-            <p className="text-green-600">HPS: ${ lastResult.automation.hpsAmount} credited to highest scorer</p>
+            <p className="text-green-600">HPS: ${lastResult.automation.hpsAmount} credited to highest scorer</p>
           ) : (
             <p className="text-muted-foreground">HPS: No payout (prize not configured)</p>
           )}
           {lastResult.automation.lpsRequestCreated ? (
-            <p className="text-yellow-600">LPS: ${ lastResult.automation.lpsAmount} fee requested from lowest scorer</p>
+            <div>
+              <p className="text-yellow-600">LPS: ${lastResult.automation.lpsAmount} fee requested from lowest scorer</p>
+              {lastResult.automation.lpsSmsStatus === 'sent' && (
+                <p className="text-green-600">SMS notification sent</p>
+              )}
+              {lastResult.automation.lpsSmsStatus === 'failed' && (
+                <p className="text-red-600">SMS failed to send</p>
+              )}
+              {lastResult.automation.lpsSmsStatus === 'no_phone' && (
+                <p className="text-muted-foreground">No phone number on file</p>
+              )}
+            </div>
           ) : (
             <p className="text-muted-foreground">LPS: No fee (not enabled)</p>
           )}
@@ -1023,6 +1048,108 @@ function LeagueSettingsForm({ league }: { league: any }) {
           </form>
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+function SendRemindersForm({ league }: { league: any }) {
+  const { toast } = useToast();
+  const [reminderType, setReminderType] = useState("weekly");
+
+  const unpaidMembers = league.members?.filter((m: any) => m.paidStatus === 'unpaid') || [];
+  const membersWithPhone = unpaidMembers.filter((m: any) => m.phoneNumber);
+
+  const sendReminders = useMutation({
+    mutationFn: async (type: string) => {
+      const response = await apiRequest('POST', `/api/leagues/${league.id}/send-reminders`, { type });
+      return response.json();
+    },
+    onSuccess: (data) => {
+      let description = '';
+      if (data.twilioConfigured && data.smsSent > 0) {
+        description = `Sent ${data.smsSent} SMS reminder(s) to unpaid members.`;
+      } else if (data.twilioConfigured && data.smsSent === 0) {
+        description = `Created ${data.remindersCreated} reminder(s). No SMS sent (no phone numbers on file).`;
+      } else {
+        description = `Created ${data.remindersCreated} reminder(s). SMS requires Twilio setup.`;
+      }
+      toast({
+        title: "Reminders Processed",
+        description,
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Failed to Send",
+        description: "Could not send reminders. Please try again.",
+        variant: "destructive",
+      });
+    }
+  });
+
+  const handleSend = () => {
+    if (unpaidMembers.length === 0) {
+      toast({
+        title: "No Unpaid Members",
+        description: "All members have paid their dues.",
+      });
+      return;
+    }
+    sendReminders.mutate(reminderType);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <Label>Reminder Type</Label>
+        <Select value={reminderType} onValueChange={setReminderType}>
+          <SelectTrigger data-testid="select-reminder-type">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="pre_season">Pre-Season Reminder</SelectItem>
+            <SelectItem value="weekly">Weekly Reminder</SelectItem>
+            <SelectItem value="final">Final Notice</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="bg-muted p-3 rounded-lg text-sm space-y-1">
+        <p className="flex items-center gap-2">
+          <Users className="w-4 h-4" />
+          <span><strong>{unpaidMembers.length}</strong> unpaid member(s)</span>
+        </p>
+        <p className="flex items-center gap-2">
+          <Phone className="w-4 h-4" />
+          <span><strong>{membersWithPhone.length}</strong> with phone numbers</span>
+        </p>
+      </div>
+
+      {membersWithPhone.length === 0 && unpaidMembers.length > 0 && (
+        <p className="text-xs text-yellow-600">
+          No phone numbers on file. Add phone numbers to members to send SMS reminders.
+        </p>
+      )}
+
+      <Button 
+        className="w-full" 
+        onClick={handleSend}
+        disabled={sendReminders.isPending || unpaidMembers.length === 0}
+        data-testid="button-send-reminders"
+      >
+        {sendReminders.isPending ? (
+          "Sending..."
+        ) : (
+          <>
+            <MessageSquare className="w-4 h-4 mr-2" />
+            Send Reminders ({unpaidMembers.length})
+          </>
+        )}
+      </Button>
+
+      <p className="text-xs text-muted-foreground text-center">
+        SMS notifications require Twilio to be configured.
+      </p>
     </div>
   );
 }

@@ -81,5 +81,15 @@ The `shared/` directory contains code used by both frontend and backend:
 - **LPS (Lowest Point Scorer)**: Automatically creates payment request for lowest scorer when LPS fee is enabled
 - **LPS Payment Page**: Public page at `/pay-lps/:token` allows members to pay their LPS fee
 
+### Payment Reminders System (Infrastructure Ready)
+- **Phone Numbers**: League members can have phone numbers stored for SMS reminders
+- **Reminder Types**: Pre-season, weekly, and final notice reminders supported
+- **Commissioner Controls**: Only commissioners can send reminders via Commish Tools tab
+- **League Start Date**: Leagues can have a start date set for scheduling purposes
+- **Manual Trigger**: Commissioners can send reminders to all unpaid members
+
 ### Pending Integrations
-- **Twilio SMS**: Not configured. User dismissed the integration setup. To enable SMS notifications for LPS payment requests, the user would need to set up Twilio. Currently, LPS payment links must be shared manually.
+- **Twilio SMS**: Configured and active. SMS notifications are sent for:
+  - LPS payment requests (automatically on score sync)
+  - Payment reminders (manually triggered by commissioners)
+- **Automated Scheduling**: Pre-season reminder automation requires a cron/scheduler service. Manual triggers are available in Commish Tools.

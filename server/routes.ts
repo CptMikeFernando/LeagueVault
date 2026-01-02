@@ -267,27 +267,48 @@ export async function registerRoutes(
       }
 
       // Create LPS (Lowest Point Scorer) payment request
+      let lpsSmsStatus = '';
       if (lpsEnabled && lpsFee > 0) {
         lowScorer = await storage.getLowestScorerForWeek(leagueId, week);
         if (lowScorer) {
           // Generate unique payment token
           const paymentToken = `lps_${leagueId}_${week}_${Date.now()}_${Math.random().toString(36).substring(7)}`;
           
+          // Get member phone number
+          const member = await storage.getLeagueMember(leagueId, lowScorer.userId);
+          
           // Create LPS payment request
-          await storage.createLpsPaymentRequest({
+          const lpsRequest = await storage.createLpsPaymentRequest({
             leagueId,
             userId: lowScorer.userId,
             week,
             amount: String(lpsFee),
             paymentToken,
-            status: 'pending'
+            phoneNumber: member?.phoneNumber || null
           });
           lpsRequestCreated = true;
           
-          // TODO: Send SMS notification via Twilio when configured
-          // The payment link would be: /pay-lps/${paymentToken}
-          console.log(`[LPS] Payment request created for user ${lowScorer.userId} - Week ${week} - $${lpsFee}`);
-          console.log(`[LPS] Payment link: /pay-lps/${paymentToken}`);
+          // Send SMS notification via Twilio if configured
+          const { sendSMS, isTwilioConfigured } = await import('./twilio');
+          if (member?.phoneNumber && await isTwilioConfigured()) {
+            const baseUrl = process.env.REPLIT_DEV_DOMAIN 
+              ? `https://${process.env.REPLIT_DEV_DOMAIN}` 
+              : 'https://your-app.replit.app';
+            const paymentLink = `${baseUrl}/pay-lps/${paymentToken}`;
+            const message = `You had the lowest score in "${league.name}" Week ${week}. Pay your $${lpsFee} LPS fee here: ${paymentLink}`;
+            
+            const smsResult = await sendSMS(member.phoneNumber, message);
+            if (smsResult.success) {
+              await storage.markLpsSmsAsSent(lpsRequest.id);
+              lpsSmsStatus = 'sent';
+            } else {
+              lpsSmsStatus = 'failed';
+            }
+          } else {
+            lpsSmsStatus = member?.phoneNumber ? 'twilio_not_configured' : 'no_phone';
+          }
+          
+          console.log(`[LPS] Payment request created for user ${lowScorer.userId} - Week ${week} - $${lpsFee} - SMS: ${lpsSmsStatus}`);
         }
       }
 
@@ -308,7 +329,8 @@ export async function registerRoutes(
           hpsAmount: hpsPrize,
           lpsRequestCreated,
           lpsRecipient: lowScorer?.userId,
-          lpsAmount: lpsFee
+          lpsAmount: lpsFee,
+          lpsSmsStatus
         }
       });
     } catch (err) {
@@ -895,6 +917,181 @@ export async function registerRoutes(
     } catch (err) {
       console.error("Error creating payment intent:", err);
       res.status(500).json({ message: "Failed to create payment" });
+    }
+  });
+
+  // === PAYMENT REMINDERS ===
+  // Update member phone number
+  app.patch("/api/leagues/:id/members/:memberId/phone", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const leagueId = Number(req.params.id);
+      const memberId = Number(req.params.memberId);
+      const { phoneNumber } = req.body;
+
+      const league = await storage.getLeague(leagueId);
+      if (!league) {
+        return res.status(404).json({ message: "League not found" });
+      }
+
+      if (league.commissionerId !== userId) {
+        return res.status(403).json({ message: "Only commissioner can update member info" });
+      }
+
+      // Verify member belongs to this league
+      const member = league.members?.find((m: any) => m.id === memberId);
+      if (!member) {
+        return res.status(404).json({ message: "Member not found in this league" });
+      }
+
+      await storage.updateMemberPhoneNumber(memberId, phoneNumber);
+      res.json({ success: true });
+    } catch (err) {
+      console.error("Error updating phone number:", err);
+      res.status(500).json({ message: "Failed to update phone number" });
+    }
+  });
+
+  // Send payment reminders to all unpaid members
+  app.post("/api/leagues/:id/send-reminders", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const leagueId = Number(req.params.id);
+      const { type } = req.body; // 'pre_season', 'weekly', 'final'
+
+      const league = await storage.getLeague(leagueId);
+      if (!league) {
+        return res.status(404).json({ message: "League not found" });
+      }
+
+      if (league.commissionerId !== userId) {
+        return res.status(403).json({ message: "Only commissioner can send reminders" });
+      }
+
+      const unpaidMembers = await storage.getUnpaidMembersWithPhone(leagueId);
+      const results: any[] = [];
+      const entryFee = league.settings?.entryFee || league.settings?.seasonDues || 0;
+
+      // Import Twilio helper
+      const { sendSMS, isTwilioConfigured } = await import('./twilio');
+      const twilioReady = await isTwilioConfigured();
+
+      for (const member of unpaidMembers) {
+        const reminder = await storage.createPaymentReminder({
+          leagueId,
+          userId: member.userId,
+          type: type || 'weekly',
+          phoneNumber: member.phoneNumber || null
+        });
+
+        if (member.phoneNumber && twilioReady) {
+          // Build reminder message
+          let message = '';
+          if (type === 'pre_season') {
+            message = `Hey! Your fantasy league "${league.name}" is starting soon. Please pay your $${entryFee} entry fee to secure your spot. - LeagueVault`;
+          } else if (type === 'final') {
+            message = `FINAL NOTICE: Your $${entryFee} dues for "${league.name}" are overdue. Please pay immediately to avoid removal. - LeagueVault`;
+          } else {
+            message = `Reminder: Your $${entryFee} dues for "${league.name}" are still unpaid. Please pay at your earliest convenience. - LeagueVault`;
+          }
+
+          const smsResult = await sendSMS(member.phoneNumber, message);
+          
+          if (smsResult.success) {
+            await storage.updateReminderStatus(reminder.id, 'sent');
+            results.push({
+              memberId: member.id,
+              userId: member.userId,
+              phoneNumber: member.phoneNumber,
+              status: 'sent',
+              messageId: smsResult.messageId
+            });
+          } else {
+            await storage.updateReminderStatus(reminder.id, 'failed');
+            results.push({
+              memberId: member.id,
+              userId: member.userId,
+              phoneNumber: member.phoneNumber,
+              status: 'failed',
+              error: smsResult.error
+            });
+          }
+        } else if (member.phoneNumber && !twilioReady) {
+          results.push({
+            memberId: member.id,
+            userId: member.userId,
+            phoneNumber: member.phoneNumber,
+            status: 'pending',
+            message: 'Twilio not configured - reminder logged'
+          });
+        } else {
+          results.push({
+            memberId: member.id,
+            userId: member.userId,
+            status: 'no_phone',
+            message: 'No phone number on file'
+          });
+        }
+      }
+
+      const sentCount = results.filter(r => r.status === 'sent').length;
+      res.json({
+        success: true,
+        remindersCreated: results.length,
+        smsSent: sentCount,
+        twilioConfigured: twilioReady,
+        results
+      });
+    } catch (err) {
+      console.error("Error sending reminders:", err);
+      res.status(500).json({ message: "Failed to send reminders" });
+    }
+  });
+
+  // Update league start date (for pre-season reminders)
+  app.patch("/api/leagues/:id/start-date", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const leagueId = Number(req.params.id);
+      const { startDate } = req.body;
+
+      const league = await storage.getLeague(leagueId);
+      if (!league) {
+        return res.status(404).json({ message: "League not found" });
+      }
+
+      if (league.commissionerId !== userId) {
+        return res.status(403).json({ message: "Only commissioner can update league" });
+      }
+
+      await storage.updateLeagueStartDate(leagueId, new Date(startDate));
+      res.json({ success: true });
+    } catch (err) {
+      console.error("Error updating start date:", err);
+      res.status(500).json({ message: "Failed to update start date" });
+    }
+  });
+
+  // Get league reminders history
+  app.get("/api/leagues/:id/reminders", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const leagueId = Number(req.params.id);
+
+      const league = await storage.getLeague(leagueId);
+      if (!league) {
+        return res.status(404).json({ message: "League not found" });
+      }
+
+      if (league.commissionerId !== userId) {
+        return res.status(403).json({ message: "Only commissioner can view reminders" });
+      }
+
+      const reminders = await storage.getLeagueReminders(leagueId);
+      res.json(reminders);
+    } catch (err) {
+      console.error("Error fetching reminders:", err);
+      res.status(500).json({ message: "Failed to fetch reminders" });
     }
   });
 

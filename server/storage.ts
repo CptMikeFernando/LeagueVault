@@ -1,7 +1,7 @@
 import { db } from "./db";
 import { 
   users, leagues, leagueMembers, payments, payouts, weeklyScores, platformFees,
-  memberWallets, walletTransactions, withdrawalRequests, lpsPaymentRequests,
+  memberWallets, walletTransactions, withdrawalRequests, lpsPaymentRequests, paymentReminders,
   type User,
   type League, type InsertLeague,
   type LeagueMember, type InsertLeagueMember,
@@ -13,6 +13,7 @@ import {
   type WalletTransaction, type InsertWalletTransaction,
   type WithdrawalRequest, type InsertWithdrawalRequest,
   type LpsPaymentRequest, type InsertLpsPaymentRequest,
+  type PaymentReminder, type InsertPaymentReminder,
   type LeagueWithMembers
 } from "@shared/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
@@ -80,6 +81,18 @@ export interface IStorage {
   getLpsPaymentByToken(token: string): Promise<LpsPaymentRequest | undefined>;
   updateLpsPaymentStatus(id: number, status: string): Promise<void>;
   markLpsSmsAsSent(id: number): Promise<void>;
+
+  // Member phone number
+  updateMemberPhoneNumber(memberId: number, phoneNumber: string): Promise<void>;
+  getUnpaidMembersWithPhone(leagueId: number): Promise<LeagueMember[]>;
+
+  // Payment reminders
+  createPaymentReminder(reminder: InsertPaymentReminder): Promise<PaymentReminder>;
+  updateReminderStatus(id: number, status: string): Promise<void>;
+  getLeagueReminders(leagueId: number): Promise<PaymentReminder[]>;
+
+  // League start date
+  updateLeagueStartDate(leagueId: number, startDate: Date): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -466,6 +479,50 @@ export class DatabaseStorage implements IStorage {
   async markLpsSmsAsSent(id: number): Promise<void> {
     await db.update(lpsPaymentRequests).set({ smsSent: true })
       .where(eq(lpsPaymentRequests.id, id));
+  }
+
+  // Member phone number methods
+  async updateMemberPhoneNumber(memberId: number, phoneNumber: string): Promise<void> {
+    await db.update(leagueMembers).set({ phoneNumber })
+      .where(eq(leagueMembers.id, memberId));
+  }
+
+  async getUnpaidMembersWithPhone(leagueId: number): Promise<LeagueMember[]> {
+    return await db.select().from(leagueMembers)
+      .where(and(
+        eq(leagueMembers.leagueId, leagueId),
+        eq(leagueMembers.paidStatus, 'unpaid')
+      ));
+  }
+
+  // Payment reminder methods
+  async createPaymentReminder(reminder: InsertPaymentReminder): Promise<PaymentReminder> {
+    const [newReminder] = await db.insert(paymentReminders).values({
+      leagueId: reminder.leagueId,
+      userId: reminder.userId,
+      type: reminder.type,
+      phoneNumber: reminder.phoneNumber || null
+    }).returning();
+    return newReminder;
+  }
+
+  async updateReminderStatus(id: number, status: string): Promise<void> {
+    await db.update(paymentReminders).set({
+      status,
+      sentAt: status === 'sent' ? new Date() : null
+    }).where(eq(paymentReminders.id, id));
+  }
+
+  async getLeagueReminders(leagueId: number): Promise<PaymentReminder[]> {
+    return await db.select().from(paymentReminders)
+      .where(eq(paymentReminders.leagueId, leagueId))
+      .orderBy(desc(paymentReminders.createdAt));
+  }
+
+  // League start date
+  async updateLeagueStartDate(leagueId: number, startDate: Date): Promise<void> {
+    await db.update(leagues).set({ startDate })
+      .where(eq(leagues.id, leagueId));
   }
 }
 
