@@ -250,8 +250,35 @@ export const withdrawalRequestsRelations = relations(withdrawalRequests, ({ one 
   }),
 }));
 
+// === LPS PAYMENT REQUESTS (Lowest Point Scorer Penalties) ===
+export const lpsPaymentRequests = pgTable("lps_payment_requests", {
+  id: serial("id").primaryKey(),
+  leagueId: integer("league_id").notNull(),
+  userId: text("user_id").notNull(),
+  week: integer("week").notNull(),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  status: text("status").notNull().default("pending"), // 'pending', 'paid', 'cancelled'
+  paymentToken: text("payment_token").notNull(), // Unique token for payment link
+  smsSent: boolean("sms_sent").notNull().default(false),
+  phoneNumber: text("phone_number"),
+  createdAt: timestamp("created_at").defaultNow(),
+  paidAt: timestamp("paid_at"),
+});
+
+export const lpsPaymentRequestsRelations = relations(lpsPaymentRequests, ({ one }) => ({
+  league: one(leagues, {
+    fields: [lpsPaymentRequests.leagueId],
+    references: [leagues.id],
+  }),
+  user: one(users, {
+    fields: [lpsPaymentRequests.userId],
+    references: [users.id],
+  }),
+}));
+
 // === ZOD SCHEMAS ===
 export const insertLeagueSchema = createInsertSchema(leagues).omit({ id: true, createdAt: true, totalDues: true });
+export const insertLpsPaymentRequestSchema = createInsertSchema(lpsPaymentRequests).omit({ id: true, createdAt: true, paidAt: true, smsSent: true });
 export const insertLeagueMemberSchema = createInsertSchema(leagueMembers).omit({ id: true, joinedAt: true });
 export const insertPaymentSchema = createInsertSchema(payments).omit({ id: true, createdAt: true, status: true, stripePaymentIntentId: true });
 export const insertPayoutSchema = createInsertSchema(payouts).omit({ id: true, createdAt: true, status: true, feeAmount: true });
@@ -280,5 +307,7 @@ export type WalletTransaction = typeof walletTransactions.$inferSelect;
 export type InsertWalletTransaction = z.infer<typeof insertWalletTransactionSchema>;
 export type WithdrawalRequest = typeof withdrawalRequests.$inferSelect;
 export type InsertWithdrawalRequest = z.infer<typeof insertWithdrawalRequestSchema>;
+export type LpsPaymentRequest = typeof lpsPaymentRequests.$inferSelect;
+export type InsertLpsPaymentRequest = z.infer<typeof insertLpsPaymentRequestSchema>;
 
 export type LeagueWithMembers = League & { members: (LeagueMember & { user: typeof users.$inferSelect })[] };

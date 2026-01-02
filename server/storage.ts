@@ -1,7 +1,7 @@
 import { db } from "./db";
 import { 
   users, leagues, leagueMembers, payments, payouts, weeklyScores, platformFees,
-  memberWallets, walletTransactions, withdrawalRequests,
+  memberWallets, walletTransactions, withdrawalRequests, lpsPaymentRequests,
   type User,
   type League, type InsertLeague,
   type LeagueMember, type InsertLeagueMember,
@@ -12,6 +12,7 @@ import {
   type MemberWallet, type InsertMemberWallet,
   type WalletTransaction, type InsertWalletTransaction,
   type WithdrawalRequest, type InsertWithdrawalRequest,
+  type LpsPaymentRequest, type InsertLpsPaymentRequest,
   type LeagueWithMembers
 } from "@shared/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
@@ -73,6 +74,12 @@ export interface IStorage {
   getWithdrawalRequest(id: number): Promise<WithdrawalRequest | undefined>;
   getUserWithdrawals(userId: string): Promise<WithdrawalRequest[]>;
   updateWithdrawalStatus(id: number, status: string, stripeTransferId?: string, failureReason?: string): Promise<void>;
+
+  // LPS Payment Requests
+  createLpsPaymentRequest(request: InsertLpsPaymentRequest): Promise<LpsPaymentRequest>;
+  getLpsPaymentByToken(token: string): Promise<LpsPaymentRequest | undefined>;
+  updateLpsPaymentStatus(id: number, status: string): Promise<void>;
+  markLpsSmsAsSent(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -428,6 +435,37 @@ export class DatabaseStorage implements IStorage {
       failureReason: failureReason || null,
       processedAt: status === 'completed' || status === 'failed' ? new Date() : null
     }).where(eq(withdrawalRequests.id, id));
+  }
+
+  // LPS Payment Request methods
+  async createLpsPaymentRequest(request: InsertLpsPaymentRequest): Promise<LpsPaymentRequest> {
+    const [newRequest] = await db.insert(lpsPaymentRequests).values({
+      leagueId: request.leagueId,
+      userId: request.userId,
+      week: request.week,
+      amount: request.amount,
+      paymentToken: request.paymentToken,
+      phoneNumber: request.phoneNumber || null
+    }).returning();
+    return newRequest;
+  }
+
+  async getLpsPaymentByToken(token: string): Promise<LpsPaymentRequest | undefined> {
+    const [request] = await db.select().from(lpsPaymentRequests)
+      .where(eq(lpsPaymentRequests.paymentToken, token));
+    return request;
+  }
+
+  async updateLpsPaymentStatus(id: number, status: string): Promise<void> {
+    await db.update(lpsPaymentRequests).set({
+      status,
+      paidAt: status === 'paid' ? new Date() : null
+    }).where(eq(lpsPaymentRequests.id, id));
+  }
+
+  async markLpsSmsAsSent(id: number): Promise<void> {
+    await db.update(lpsPaymentRequests).set({ smsSent: true })
+      .where(eq(lpsPaymentRequests.id, id));
   }
 }
 

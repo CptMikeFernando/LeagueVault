@@ -464,8 +464,10 @@ function IssuePayoutForm({ league }: { league: any }) {
          <Select onValueChange={setReason} value={reason}>
             <SelectTrigger data-testid="select-payout-reason"><SelectValue /></SelectTrigger>
             <SelectContent>
+              <SelectItem value="1st_place">1st Place</SelectItem>
+              <SelectItem value="2nd_place">2nd Place</SelectItem>
+              <SelectItem value="3rd_place">3rd Place</SelectItem>
               <SelectItem value="weekly_high_score">Weekly High Score</SelectItem>
-              <SelectItem value="championship">Championship Prize</SelectItem>
               <SelectItem value="refund">Refund</SelectItem>
               <SelectItem value="other">Other</SelectItem>
             </SelectContent>
@@ -774,6 +776,7 @@ function TreasuryTab({ leagueId }: { leagueId: number }) {
 
 function SyncScoresForm({ league }: { league: any }) {
   const [week, setWeek] = useState("1");
+  const [lastResult, setLastResult] = useState<any>(null);
   const { toast } = useToast();
   
   const syncScores = useMutation({
@@ -783,9 +786,19 @@ function SyncScoresForm({ league }: { league: any }) {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['/api/leagues', league.id] });
+      setLastResult(data);
+      
+      let description = `${data.scoresUpdated} scores updated from ${data.source}`;
+      if (data.automation?.hpsPayoutCreated) {
+        description += ` | HPS payout: $${data.automation.hpsAmount}`;
+      }
+      if (data.automation?.lpsRequestCreated) {
+        description += ` | LPS fee requested: $${data.automation.lpsAmount}`;
+      }
+      
       toast({
         title: "Scores Synced",
-        description: `${data.scoresUpdated} scores updated from ${data.source}`,
+        description,
       });
     },
     onError: () => {
@@ -834,6 +847,22 @@ function SyncScoresForm({ league }: { league: any }) {
           </>
         )}
       </Button>
+      
+      {lastResult?.automation && (
+        <div className="text-xs space-y-1 p-3 bg-muted rounded-lg" data-testid="sync-automation-results">
+          <p className="font-medium">Automation Results:</p>
+          {lastResult.automation.hpsPayoutCreated ? (
+            <p className="text-green-600">HPS: ${ lastResult.automation.hpsAmount} credited to highest scorer</p>
+          ) : (
+            <p className="text-muted-foreground">HPS: No payout (prize not configured)</p>
+          )}
+          {lastResult.automation.lpsRequestCreated ? (
+            <p className="text-yellow-600">LPS: ${ lastResult.automation.lpsAmount} fee requested from lowest scorer</p>
+          ) : (
+            <p className="text-muted-foreground">LPS: No fee (not enabled)</p>
+          )}
+        </div>
+      )}
     </form>
   );
 }

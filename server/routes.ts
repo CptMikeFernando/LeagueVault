@@ -227,6 +227,70 @@ export async function registerRoutes(
         }
       }
 
+      // Get league settings for automated payouts
+      const settings = league.settings || {};
+      const hpsPrize = settings.weeklyHighScorePrize || settings.weeklyPayoutAmount || 0;
+      const lpsEnabled = settings.weeklyLowScoreFeeEnabled || settings.lowestScorerFeeEnabled || false;
+      const lpsFee = settings.weeklyLowScoreFee || settings.lowestScorerFee || 0;
+
+      let hpsPayoutCreated = false;
+      let lpsRequestCreated = false;
+      let highScorer: any = null;
+      let lowScorer: any = null;
+
+      // Automatically issue HPS (Highest Point Scorer) payout
+      if (hpsPrize > 0) {
+        highScorer = await storage.getHighestScorerForWeek(leagueId, week);
+        if (highScorer) {
+          // Create payout to highest scorer's wallet
+          const payout = await storage.createPayout({
+            leagueId,
+            userId: highScorer.userId,
+            amount: String(hpsPrize),
+            reason: 'weekly_high_score',
+            week,
+            payoutType: 'standard',
+            status: 'approved'
+          });
+
+          // Credit to member wallet
+          const wallet = await storage.getOrCreateWallet(leagueId, highScorer.userId);
+          await storage.creditWallet(
+            wallet.id, 
+            String(hpsPrize), 
+            'payout', 
+            payout.id, 
+            `Week ${week} High Point Scorer Prize`
+          );
+          hpsPayoutCreated = true;
+        }
+      }
+
+      // Create LPS (Lowest Point Scorer) payment request
+      if (lpsEnabled && lpsFee > 0) {
+        lowScorer = await storage.getLowestScorerForWeek(leagueId, week);
+        if (lowScorer) {
+          // Generate unique payment token
+          const paymentToken = `lps_${leagueId}_${week}_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+          
+          // Create LPS payment request
+          await storage.createLpsPaymentRequest({
+            leagueId,
+            userId: lowScorer.userId,
+            week,
+            amount: String(lpsFee),
+            paymentToken,
+            status: 'pending'
+          });
+          lpsRequestCreated = true;
+          
+          // TODO: Send SMS notification via Twilio when configured
+          // The payment link would be: /pay-lps/${paymentToken}
+          console.log(`[LPS] Payment request created for user ${lowScorer.userId} - Week ${week} - $${lpsFee}`);
+          console.log(`[LPS] Payment link: /pay-lps/${paymentToken}`);
+        }
+      }
+
       // Update lastScoreSync timestamp
       const currentSettings = league.settings || {};
       await storage.updateLeagueSettings(leagueId, {
@@ -237,7 +301,15 @@ export async function registerRoutes(
       res.json({ 
         success: true, 
         scoresUpdated,
-        source: league.platform === 'custom' ? 'manual' : league.platform
+        source: league.platform === 'custom' ? 'manual' : league.platform,
+        automation: {
+          hpsPayoutCreated,
+          hpsRecipient: highScorer?.userId,
+          hpsAmount: hpsPrize,
+          lpsRequestCreated,
+          lpsRecipient: lowScorer?.userId,
+          lpsAmount: lpsFee
+        }
       });
     } catch (err) {
       console.error("Error syncing scores:", err);
@@ -283,6 +355,76 @@ export async function registerRoutes(
     } catch (err) {
       console.error("Error fetching transactions:", err);
       res.status(500).json({ message: "Failed to fetch transactions" });
+    }
+  });
+
+  // === LPS PAYMENT (Public endpoint for lowest scorer fee payment) ===
+  app.get("/api/lps-payment/:token", async (req, res) => {
+    try {
+      const { token } = req.params;
+      const lpsRequest = await storage.getLpsPaymentByToken(token);
+      
+      if (!lpsRequest) {
+        return res.status(404).json({ message: "Payment request not found or expired" });
+      }
+      
+      if (lpsRequest.status === 'paid') {
+        return res.status(400).json({ message: "This payment has already been completed" });
+      }
+
+      // Get league details for display
+      const league = await storage.getLeague(lpsRequest.leagueId);
+      
+      res.json({
+        id: lpsRequest.id,
+        leagueId: lpsRequest.leagueId,
+        leagueName: league?.name || 'Unknown League',
+        week: lpsRequest.week,
+        amount: lpsRequest.amount,
+        status: lpsRequest.status
+      });
+    } catch (err) {
+      console.error("Error fetching LPS payment:", err);
+      res.status(500).json({ message: "Failed to fetch payment details" });
+    }
+  });
+
+  app.post("/api/lps-payment/:token/pay", async (req, res) => {
+    try {
+      const { token } = req.params;
+      const lpsRequest = await storage.getLpsPaymentByToken(token);
+      
+      if (!lpsRequest) {
+        return res.status(404).json({ message: "Payment request not found or expired" });
+      }
+      
+      if (lpsRequest.status === 'paid') {
+        return res.status(400).json({ message: "This payment has already been completed" });
+      }
+
+      // Create payment record
+      const payment = await storage.createPayment({
+        leagueId: lpsRequest.leagueId,
+        userId: lpsRequest.userId,
+        amount: lpsRequest.amount,
+        status: 'completed',
+        stripePaymentIntentId: null
+      });
+
+      // Update LPS request status
+      await storage.updateLpsPaymentStatus(lpsRequest.id, 'paid');
+
+      // Add to league treasury
+      await storage.updateLeagueTotalDues(lpsRequest.leagueId, Number(lpsRequest.amount));
+      
+      res.json({ 
+        success: true, 
+        message: "Payment completed successfully",
+        paymentId: payment.id
+      });
+    } catch (err) {
+      console.error("Error processing LPS payment:", err);
+      res.status(500).json({ message: "Payment failed" });
     }
   });
 
