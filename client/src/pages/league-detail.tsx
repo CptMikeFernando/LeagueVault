@@ -47,7 +47,8 @@ import {
   Send,
   Mail,
   UserPlus,
-  Bell
+  Bell,
+  X
 } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useState } from "react";
@@ -1962,11 +1963,30 @@ function SendReminderButton({ leagueId, memberId, hasPhone }: { leagueId: number
 }
 
 function PendingInvitesSection({ leagueId }: { leagueId: number }) {
+  const { toast } = useToast();
   const { data: invites, isLoading } = useQuery<any[]>({
     queryKey: ['/api/leagues', leagueId, 'invites'],
     queryFn: async () => {
       const res = await fetch(`/api/leagues/${leagueId}/invites`);
       return res.json();
+    }
+  });
+
+  const cancelInvite = useMutation({
+    mutationFn: async (inviteId: number) => {
+      const res = await apiRequest('DELETE', `/api/leagues/${leagueId}/invites/${inviteId}`);
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || 'Failed to cancel invite');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/leagues', leagueId, 'invites'] });
+      toast({ title: "Invite cancelled" });
+    },
+    onError: (err: any) => {
+      toast({ title: "Failed to cancel invite", description: err.message, variant: "destructive" });
     }
   });
 
@@ -1979,16 +1999,27 @@ function PendingInvitesSection({ leagueId }: { leagueId: number }) {
       <h4 className="font-medium mb-3">Pending Invites</h4>
       <div className="space-y-2">
         {pendingInvites.map((invite: any) => (
-          <div key={invite.id} className="flex items-center justify-between p-2 bg-muted/30 rounded-md">
-            <div className="flex items-center gap-2">
+          <div key={invite.id} className="flex items-center justify-between gap-2 p-2 bg-muted/30 rounded-md">
+            <div className="flex items-center gap-2 flex-1 min-w-0">
               {invite.contactType === 'phone' ? (
-                <Phone className="w-4 h-4 text-muted-foreground" />
+                <Phone className="w-4 h-4 text-muted-foreground flex-shrink-0" />
               ) : (
-                <Mail className="w-4 h-4 text-muted-foreground" />
+                <Mail className="w-4 h-4 text-muted-foreground flex-shrink-0" />
               )}
-              <span className="text-sm">{invite.contactValue}</span>
+              <span className="text-sm truncate">{invite.contactValue}</span>
             </div>
-            <Badge variant="outline" className="capitalize">{invite.status}</Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="capitalize">{invite.status}</Badge>
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={() => cancelInvite.mutate(invite.id)}
+                disabled={cancelInvite.isPending}
+                data-testid={`button-cancel-invite-${invite.id}`}
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
           </div>
         ))}
       </div>

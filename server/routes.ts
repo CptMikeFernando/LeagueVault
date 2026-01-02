@@ -1551,6 +1551,26 @@ export async function registerRoutes(
     }
   });
 
+  // Cancel a pending invite
+  app.delete("/api/leagues/:id/invites/:inviteId", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const leagueId = Number(req.params.id);
+      const inviteId = Number(req.params.inviteId);
+      
+      const league = await storage.getLeague(leagueId);
+      if (!league || league.commissionerId !== userId) {
+        return res.status(403).json({ message: "Only commissioners can cancel invites" });
+      }
+      
+      await storage.updateInviteStatus(inviteId, 'cancelled');
+      res.json({ success: true, message: "Invite cancelled" });
+    } catch (err) {
+      console.error("Error cancelling invite:", err);
+      res.status(500).json({ message: "Failed to cancel invite" });
+    }
+  });
+
   // === TRANSFER COMMISSIONER ===
   app.post("/api/leagues/:id/transfer-commissioner", isAuthenticated, async (req: any, res) => {
     try {
