@@ -1697,6 +1697,7 @@ function DeleteLeagueSection({ league }: { league: any }) {
 
 function MessageBoard({ leagueId }: { leagueId: number }) {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [newMessage, setNewMessage] = useState("");
 
   const { data: messages, isLoading } = useQuery({
@@ -1736,12 +1737,46 @@ function MessageBoard({ leagueId }: { leagueId: number }) {
     },
   });
 
+  const deleteMessage = useMutation({
+    mutationFn: async (messageId: number) => {
+      const res = await fetch(`/api/leagues/${leagueId}/messages/${messageId}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.message || 'Failed to delete message');
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/leagues', leagueId, 'messages'] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (newMessage.trim()) {
       postMessage.mutate(newMessage.trim());
     }
   };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      if (newMessage.trim()) {
+        postMessage.mutate(newMessage.trim());
+      }
+    }
+  };
+
+  const sortedMessages = messages ? [...messages].reverse() : [];
 
   return (
     <Card>
@@ -1753,26 +1788,6 @@ function MessageBoard({ leagueId }: { leagueId: number }) {
         <CardDescription>Chat with your league members</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <form onSubmit={handleSubmit} className="flex gap-2">
-          <Textarea
-            placeholder="Write a message..."
-            value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
-            className="min-h-[60px] resize-none flex-1"
-            data-testid="input-message"
-          />
-          <Button 
-            type="submit" 
-            size="icon" 
-            disabled={!newMessage.trim() || postMessage.isPending}
-            data-testid="button-send-message"
-          >
-            <Send className="w-4 h-4" />
-          </Button>
-        </form>
-
-        <Separator />
-
         <ScrollArea className="h-[250px]">
           {isLoading ? (
             <div className="space-y-3">
@@ -1786,14 +1801,14 @@ function MessageBoard({ leagueId }: { leagueId: number }) {
                 </div>
               ))}
             </div>
-          ) : messages?.length === 0 ? (
+          ) : sortedMessages.length === 0 ? (
             <p className="text-center text-muted-foreground text-sm py-8">
               No messages yet. Be the first to post!
             </p>
           ) : (
             <div className="space-y-4">
-              {messages?.map((msg: any) => (
-                <div key={msg.id} className="flex gap-3" data-testid={`message-${msg.id}`}>
+              {sortedMessages.map((msg: any) => (
+                <div key={msg.id} className="flex gap-3 group" data-testid={`message-${msg.id}`}>
                   <Avatar className="h-8 w-8">
                     <AvatarFallback>
                       {msg.user?.firstName?.[0] || msg.userId.substring(0, 2).toUpperCase()}
@@ -1809,6 +1824,18 @@ function MessageBoard({ leagueId }: { leagueId: number }) {
                       <span className="text-xs text-muted-foreground">
                         {msg.createdAt ? format(new Date(msg.createdAt), 'MMM d, h:mm a') : ''}
                       </span>
+                      {user?.id === msg.userId && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-5 w-5 invisible group-hover:visible"
+                          onClick={() => deleteMessage.mutate(msg.id)}
+                          disabled={deleteMessage.isPending}
+                          data-testid={`button-delete-message-${msg.id}`}
+                        >
+                          <Trash2 className="h-3 w-3 text-muted-foreground" />
+                        </Button>
+                      )}
                     </div>
                     <p className="text-sm text-muted-foreground break-words">
                       {msg.content}
@@ -1819,6 +1846,27 @@ function MessageBoard({ leagueId }: { leagueId: number }) {
             </div>
           )}
         </ScrollArea>
+
+        <Separator />
+
+        <form onSubmit={handleSubmit} className="flex gap-2">
+          <Textarea
+            placeholder="Write a message... (Enter to send, Shift+Enter for new line)"
+            value={newMessage}
+            onChange={(e) => setNewMessage(e.target.value)}
+            onKeyDown={handleKeyDown}
+            className="min-h-[60px] resize-none flex-1"
+            data-testid="input-message"
+          />
+          <Button 
+            type="submit" 
+            size="icon" 
+            disabled={!newMessage.trim() || postMessage.isPending}
+            data-testid="button-send-message"
+          >
+            <Send className="w-4 h-4" />
+          </Button>
+        </form>
       </CardContent>
     </Card>
   );

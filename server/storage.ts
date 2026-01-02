@@ -102,6 +102,8 @@ export interface IStorage {
   // League messages (message board)
   createLeagueMessage(leagueId: number, userId: string, content: string): Promise<LeagueMessage>;
   getLeagueMessages(leagueId: number, limit?: number): Promise<(LeagueMessage & { user?: User })[]>;
+  getLeagueMessage(messageId: number): Promise<LeagueMessage | undefined>;
+  deleteLeagueMessage(messageId: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -623,6 +625,15 @@ export class DatabaseStorage implements IStorage {
       ...row.message,
       user: row.user || undefined
     }));
+  }
+
+  async getLeagueMessage(messageId: number): Promise<LeagueMessage | undefined> {
+    const [message] = await db.select().from(leagueMessages).where(eq(leagueMessages.id, messageId));
+    return message;
+  }
+
+  async deleteLeagueMessage(messageId: number): Promise<void> {
+    await db.delete(leagueMessages).where(eq(leagueMessages.id, messageId));
   }
 }
 

@@ -1377,5 +1377,34 @@ export async function registerRoutes(
     }
   });
 
+  app.delete("/api/leagues/:id/messages/:messageId", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const leagueId = Number(req.params.id);
+      const messageId = Number(req.params.messageId);
+
+      const league = await storage.getLeague(leagueId);
+      if (!league) {
+        return res.status(404).json({ message: "League not found" });
+      }
+
+      const message = await storage.getLeagueMessage(messageId);
+      if (!message || message.leagueId !== leagueId) {
+        return res.status(404).json({ message: "Message not found" });
+      }
+
+      // Only the author or commissioner can delete
+      if (message.userId !== userId && league.commissionerId !== userId) {
+        return res.status(403).json({ message: "You can only delete your own messages" });
+      }
+
+      await storage.deleteLeagueMessage(messageId);
+      res.status(204).send();
+    } catch (err) {
+      console.error("Error deleting message:", err);
+      res.status(500).json({ message: "Failed to delete message" });
+    }
+  });
+
   return httpServer;
 }
