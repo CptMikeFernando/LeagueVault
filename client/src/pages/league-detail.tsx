@@ -48,7 +48,8 @@ import {
   Mail,
   UserPlus,
   Bell,
-  X
+  X,
+  Pencil
 } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useState } from "react";
@@ -282,7 +283,7 @@ export default function LeagueDetail() {
                     <TableHead>Team Name</TableHead>
                     <TableHead>Role</TableHead>
                     <TableHead>Status</TableHead>
-                    {isCommissioner && <TableHead>Reminder</TableHead>}
+                    {isCommissioner && <TableHead>Actions</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -305,7 +306,10 @@ export default function LeagueDetail() {
                       </TableCell>
                       {isCommissioner && (
                         <TableCell>
-                          <SendReminderButton leagueId={league.id} memberId={member.id} hasPhone={!!member.phoneNumber} hasEmail={!!member.email} paidStatus={member.paidStatus} />
+                          <div className="flex items-center gap-2">
+                            <EditMemberDialog leagueId={league.id} member={member} />
+                            <SendReminderButton leagueId={league.id} memberId={member.id} hasPhone={!!member.phoneNumber} hasEmail={!!member.email} paidStatus={member.paidStatus} />
+                          </div>
                         </TableCell>
                       )}
                     </TableRow>
@@ -1931,6 +1935,116 @@ function InviteMemberDialog({ leagueId }: { leagueId: number }) {
             data-testid="button-send-invite"
           >
             {sendInvite.isPending ? 'Sending...' : 'Send Invite'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function EditMemberDialog({ leagueId, member }: { leagueId: number; member: any }) {
+  const [open, setOpen] = useState(false);
+  const [teamName, setTeamName] = useState(member.teamName || '');
+  const [ownerName, setOwnerName] = useState(member.ownerName || '');
+  const [phoneNumber, setPhoneNumber] = useState(member.phoneNumber || '');
+  const [email, setEmail] = useState(member.email || '');
+  const { toast } = useToast();
+
+  const updateMember = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest('PATCH', `/api/leagues/${leagueId}/members/${member.id}`, {
+        teamName: teamName.trim() || null,
+        ownerName: ownerName.trim() || null,
+        phoneNumber: phoneNumber.trim() || null,
+        email: email.trim() || null
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || 'Failed to update member');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/leagues', leagueId] });
+      toast({ title: "Member updated", description: "Member details have been saved." });
+      setOpen(false);
+    },
+    onError: (err: any) => {
+      toast({ title: "Failed to update", description: err.message, variant: "destructive" });
+    }
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={(isOpen) => {
+      setOpen(isOpen);
+      if (isOpen) {
+        setTeamName(member.teamName || '');
+        setOwnerName(member.ownerName || '');
+        setPhoneNumber(member.phoneNumber || '');
+        setEmail(member.email || '');
+      }
+    }}>
+      <DialogTrigger asChild>
+        <Button size="icon" variant="ghost" data-testid={`button-edit-member-${member.id}`}>
+          <Pencil className="w-4 h-4" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Edit Member</DialogTitle>
+          <DialogDescription>Update member contact information and details.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label>Team Name</Label>
+              <Input
+                value={teamName}
+                onChange={(e) => setTeamName(e.target.value)}
+                placeholder="Team Name"
+                data-testid="input-edit-team-name"
+              />
+            </div>
+            <div>
+              <Label>Owner Name</Label>
+              <Input
+                value={ownerName}
+                onChange={(e) => setOwnerName(e.target.value)}
+                placeholder="Owner Name"
+                data-testid="input-edit-owner-name"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label>Phone Number</Label>
+              <Input
+                value={phoneNumber}
+                onChange={(e) => setPhoneNumber(e.target.value)}
+                placeholder="+1234567890"
+                data-testid="input-edit-phone"
+              />
+            </div>
+            <div>
+              <Label>Email</Label>
+              <Input
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="member@example.com"
+                type="email"
+                data-testid="input-edit-email"
+              />
+            </div>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+          <Button
+            onClick={() => updateMember.mutate()}
+            disabled={updateMember.isPending}
+            data-testid="button-save-member"
+          >
+            {updateMember.isPending ? 'Saving...' : 'Save Changes'}
           </Button>
         </DialogFooter>
       </DialogContent>

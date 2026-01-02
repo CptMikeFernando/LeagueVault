@@ -1597,6 +1597,58 @@ export async function registerRoutes(
     }
   });
 
+  // === UPDATE MEMBER DETAILS ===
+  const updateMemberSchema = z.object({
+    teamName: z.string().max(100).nullable().optional(),
+    ownerName: z.string().max(100).nullable().optional(),
+    phoneNumber: z.string().max(20).nullable().optional(),
+    email: z.string().email().max(255).nullable().optional().or(z.literal('').transform(() => null))
+  });
+
+  app.patch("/api/leagues/:id/members/:memberId", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const leagueId = Number(req.params.id);
+      const memberId = Number(req.params.memberId);
+      
+      const parseResult = updateMemberSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ message: "Invalid request data", errors: parseResult.error.flatten() });
+      }
+      const { teamName, ownerName, phoneNumber, email } = parseResult.data;
+
+      // Verify league exists and user is commissioner
+      const league = await storage.getLeague(leagueId);
+      if (!league) {
+        return res.status(404).json({ message: "League not found" });
+      }
+
+      if (league.commissionerId !== userId) {
+        return res.status(403).json({ message: "Only commissioners can update member details" });
+      }
+
+      // Fetch fresh member data directly from database
+      const member = await storage.getLeagueMemberById(memberId);
+      if (!member || member.leagueId !== leagueId) {
+        return res.status(404).json({ message: "Member not found in this league" });
+      }
+
+      // Build update object - merge with current DB values for fields not provided
+      const updates = {
+        teamName: teamName !== undefined ? (teamName || null) : member.teamName,
+        ownerName: ownerName !== undefined ? (ownerName || null) : member.ownerName,
+        phoneNumber: phoneNumber !== undefined ? (phoneNumber || null) : member.phoneNumber,
+        email: email !== undefined ? (email || null) : member.email
+      };
+
+      const updatedMember = await storage.updateMemberDetails(memberId, updates);
+      res.json(updatedMember);
+    } catch (err) {
+      console.error("Error updating member:", err);
+      res.status(500).json({ message: "Failed to update member" });
+    }
+  });
+
   // === TRANSFER COMMISSIONER ===
   app.post("/api/leagues/:id/transfer-commissioner", isAuthenticated, async (req: any, res) => {
     try {

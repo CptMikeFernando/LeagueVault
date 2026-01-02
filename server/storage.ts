@@ -45,7 +45,9 @@ export interface IStorage {
 
   addLeagueMember(member: InsertLeagueMember): Promise<LeagueMember>;
   getLeagueMember(leagueId: number, userId: string): Promise<LeagueMember | undefined>;
+  getLeagueMemberById(id: number): Promise<LeagueMember | undefined>;
   updateMemberStatus(id: number, status: string): Promise<void>;
+  updateMemberDetails(id: number, details: { teamName?: string | null; ownerName?: string | null; phoneNumber?: string | null; email?: string | null }): Promise<LeagueMember>;
 
   createPayment(payment: InsertPayment & { userId: string; status: string; stripePaymentIntentId?: string | null }): Promise<Payment>;
   createPayout(payout: InsertPayout & { status: string }): Promise<Payout>;
@@ -215,6 +217,20 @@ export class DatabaseStorage implements IStorage {
     const [member] = await db.select().from(leagueMembers)
       .where(and(eq(leagueMembers.leagueId, leagueId), eq(leagueMembers.userId, userId)));
     return member;
+  }
+
+  async getLeagueMemberById(id: number): Promise<LeagueMember | undefined> {
+    const [member] = await db.select().from(leagueMembers)
+      .where(eq(leagueMembers.id, id));
+    return member;
+  }
+
+  async updateMemberDetails(id: number, details: { teamName?: string | null; ownerName?: string | null; phoneNumber?: string | null; email?: string | null }): Promise<LeagueMember> {
+    const [updated] = await db.update(leagueMembers)
+      .set(details)
+      .where(eq(leagueMembers.id, id))
+      .returning();
+    return updated;
   }
   
   async updateMemberStatus(id: number, status: string): Promise<void> {
