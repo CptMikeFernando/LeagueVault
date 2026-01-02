@@ -16,7 +16,7 @@ export function useLeagues() {
 
 export function useLeague(id: number) {
   return useQuery({
-    queryKey: [api.leagues.get.path, id],
+    queryKey: ['/api/leagues', id],
     queryFn: async () => {
       const url = buildUrl(api.leagues.get.path, { id });
       const res = await fetch(url, { credentials: "include" });
@@ -82,7 +82,7 @@ export function useJoinLeague() {
       return api.leagues.join.responses[201].parse(await res.json());
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: [api.leagues.get.path, variables.leagueId] });
+      queryClient.invalidateQueries({ queryKey: ['/api/leagues', variables.leagueId] });
       toast({
         title: "Joined League",
         description: "You have successfully joined this league.",

@@ -34,7 +34,7 @@ export function useCreatePayment() {
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: [api.payments.history.path, variables.leagueId] });
-      queryClient.invalidateQueries({ queryKey: [api.leagues.get.path, variables.leagueId] });
+      queryClient.invalidateQueries({ queryKey: ['/api/leagues', variables.leagueId] });
       toast({
         title: "Payment Successful",
         description: "Your dues have been paid securely.",
