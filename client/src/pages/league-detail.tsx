@@ -1054,6 +1054,7 @@ function LeagueSettingsForm({ league }: { league: any }) {
   const { toast } = useToast();
   const settings = league.settings || {};
   
+  const [isFreeLeague, setIsFreeLeague] = useState(settings.isFreeLeague || false);
   const [entryFee, setEntryFee] = useState(String(settings.entryFee || settings.seasonDues || 0));
   const [numberOfWeeks, setNumberOfWeeks] = useState(String(settings.numberOfWeeks || 17));
   const [firstPlacePayout, setFirstPlacePayout] = useState(String(settings.firstPlacePayout || 0));
@@ -1087,14 +1088,15 @@ function LeagueSettingsForm({ league }: { league: any }) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     updateSettings.mutate({
-      entryFee: Number(entryFee),
+      isFreeLeague,
+      entryFee: isFreeLeague ? 0 : Number(entryFee),
       numberOfWeeks: Number(numberOfWeeks),
-      firstPlacePayout: Number(firstPlacePayout),
-      secondPlacePayout: Number(secondPlacePayout),
-      thirdPlacePayout: Number(thirdPlacePayout),
-      weeklyHighScorePrize: Number(weeklyHighScorePrize),
-      weeklyLowScoreFee: Number(weeklyLowScoreFee),
-      weeklyLowScoreFeeEnabled,
+      firstPlacePayout: isFreeLeague ? 0 : Number(firstPlacePayout),
+      secondPlacePayout: isFreeLeague ? 0 : Number(secondPlacePayout),
+      thirdPlacePayout: isFreeLeague ? 0 : Number(thirdPlacePayout),
+      weeklyHighScorePrize: isFreeLeague ? 0 : Number(weeklyHighScorePrize),
+      weeklyLowScoreFee: isFreeLeague ? 0 : Number(weeklyLowScoreFee),
+      weeklyLowScoreFeeEnabled: isFreeLeague ? false : weeklyLowScoreFeeEnabled,
     });
   };
 
@@ -1110,6 +1112,21 @@ function LeagueSettingsForm({ league }: { league: any }) {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg border">
+              <div className="space-y-0.5">
+                <Label htmlFor="freeLeague" className="text-base font-medium">Free League</Label>
+                <p className="text-sm text-muted-foreground">Toggle on if this league has no dues or payouts</p>
+              </div>
+              <Switch 
+                id="freeLeague"
+                checked={isFreeLeague}
+                onCheckedChange={setIsFreeLeague}
+                data-testid="switch-free-league"
+              />
+            </div>
+
+            {!isFreeLeague && (
+            <>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="entryFee">Entry Fee (Per Person)</Label>
@@ -1258,6 +1275,8 @@ function LeagueSettingsForm({ league }: { league: any }) {
                 </div>
               )}
             </div>
+            </>
+            )}
 
             <div className="flex justify-end pt-4">
               <Button type="submit" disabled={updateSettings.isPending} data-testid="button-save-settings">
