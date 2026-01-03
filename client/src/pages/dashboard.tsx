@@ -85,12 +85,12 @@ export default function Dashboard() {
                         <span className="font-mono">${league.settings?.weeklyHighScorePrize || league.settings?.weeklyPayoutAmount}</span>
                       </div>
                     )}
-                    {league.settings?.lpsEnabled && league.settings?.lpsFeeAmount && Number(league.settings.lpsFeeAmount) > 0 && (
+                    {league.settings?.weeklyLowScoreFeeEnabled && league.settings?.weeklyLowScoreFee && Number(league.settings.weeklyLowScoreFee) > 0 && (
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-muted-foreground flex items-center gap-2">
                           <TrendingDown className="w-4 h-4" /> LPS Weekly Fee
                         </span>
-                        <span className="font-mono">${league.settings.lpsFeeAmount}</span>
+                        <span className="font-mono">${league.settings.weeklyLowScoreFee}</span>
                       </div>
                     )}
                   </div>
