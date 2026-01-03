@@ -268,8 +268,15 @@ function ImportLeagueDialog() {
               
               {isPrivate && (
                 <div className="space-y-3 p-3 bg-muted/50 rounded-lg">
-                  <p className="text-xs text-muted-foreground">
-                    Private leagues require ESPN cookies. Find these in your browser's developer tools.
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    <strong>How to find your ESPN cookies:</strong><br />
+                    1. Go to your ESPN league homepage<br />
+                    2. Right-click and select "Inspect"<br />
+                    3. Click "Application" at the top<br />
+                    4. Expand "Cookies" in the left sidebar<br />
+                    5. Click on "https://fantasy.espn.com"<br />
+                    6. Search for "espn_s2" and "SWID"<br />
+                    7. Copy their values and paste below
                   </p>
                   <div className="space-y-2">
                     <Label htmlFor="espnS2" className="text-xs">espn_s2 Cookie</Label>
