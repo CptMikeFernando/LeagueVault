@@ -1678,6 +1678,7 @@ export async function registerRoutes(
         if (!member.phoneNumber) {
           return res.status(400).json({ message: "Member has no phone number" });
         }
+        const { sendSMS } = await import('./twilio');
         const result = await sendSMS(member.phoneNumber, inviteMessage);
         if (result.success) {
           return res.json({ success: true, method: 'sms', message: `Invite sent via SMS to ${member.phoneNumber}` });
@@ -1688,8 +1689,13 @@ export async function registerRoutes(
         if (!member.email) {
           return res.status(400).json({ message: "Member has no email" });
         }
-        // Email sending not yet configured
-        return res.json({ success: true, method: 'email', message: `Email invite would be sent to ${member.email} (email not configured)` });
+        const { sendInviteEmail } = await import('./sendgrid');
+        const result = await sendInviteEmail(member.email, league.name, paymentUrl);
+        if (result.success) {
+          return res.json({ success: true, method: 'email', message: `Invite sent via email to ${member.email}` });
+        } else {
+          return res.status(500).json({ message: result.error || "Failed to send email" });
+        }
       }
 
       return res.status(400).json({ message: "Invalid method. Use 'sms' or 'email'" });
@@ -1793,8 +1799,19 @@ export async function registerRoutes(
         if (!member.email) {
           return res.status(400).json({ message: "Member does not have an email address" });
         }
-        // Email sending not configured yet - would require SendGrid/Resend setup
-        return res.status(400).json({ message: "Email reminders not configured yet. Please use SMS or contact support to enable email." });
+        const { sendReminderEmail } = await import('./sendgrid');
+        const result = await sendReminderEmail(member.email, league.name, leagueUrl);
+        if (result.success) {
+          await storage.createPaymentReminder({
+            leagueId,
+            userId: member.userId,
+            type: 'individual',
+            email: member.email
+          });
+          return res.json({ success: true, messageId: result.messageId, method: 'email' });
+        } else {
+          return res.status(500).json({ message: result.error || "Failed to send email" });
+        }
       } else {
         // Default to SMS
         if (!member.phoneNumber) {
