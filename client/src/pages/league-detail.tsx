@@ -183,7 +183,9 @@ export default function LeagueDetail() {
         <TabsList className="w-full justify-start border-b rounded-none h-auto p-0 bg-transparent gap-6">
           <TabsTrigger value="overview" className="data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-0 py-3 bg-transparent font-medium">Overview</TabsTrigger>
           <TabsTrigger value="members" className="data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-0 py-3 bg-transparent font-medium">Members</TabsTrigger>
-          <TabsTrigger value="finances" className="data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-0 py-3 bg-transparent font-medium">Finances</TabsTrigger>
+          <TabsTrigger value="finances" className="data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-0 py-3 bg-transparent font-medium">
+            {isCommissioner ? "Finances" : "My Wallet"}
+          </TabsTrigger>
           {isCommissioner && (
             <>
               <TabsTrigger value="treasury" className="data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-0 py-3 bg-transparent font-medium" data-testid="tab-treasury">Treasury</TabsTrigger>
@@ -338,7 +340,11 @@ export default function LeagueDetail() {
         </TabsContent>
 
         <TabsContent value="finances">
-          <FinancesTab league={league} />
+          {isCommissioner ? (
+            <FinancesTab league={league} />
+          ) : (
+            <MyWalletTab leagueId={leagueId} userId={user!.id} />
+          )}
         </TabsContent>
 
         {isCommissioner && (
@@ -721,6 +727,102 @@ function WeeklyScoreForm({ league }: { league: any }) {
          {updateScore.isPending ? "Saving..." : "Record Score"}
       </Button>
     </form>
+  );
+}
+
+function MyWalletTab({ leagueId, userId }: { leagueId: number; userId: string }) {
+  const { data: walletData, isLoading } = useQuery({
+    queryKey: ['/api/wallets', leagueId, userId],
+    queryFn: async () => {
+      const res = await fetch(`/api/wallets/league/${leagueId}`, { credentials: 'include' });
+      if (!res.ok) {
+        if (res.status === 404) return null;
+        throw new Error('Failed to fetch wallet');
+      }
+      return res.json();
+    }
+  });
+
+  if (isLoading) return <Skeleton className="h-48 w-full" />;
+
+  const wallet = walletData?.wallet;
+  const transactions = walletData?.transactions || [];
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Available Balance</CardTitle>
+            <Wallet className="h-4 w-4 text-green-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">
+              ${wallet ? Number(wallet.availableBalance).toFixed(2) : '0.00'}
+            </div>
+            <p className="text-xs text-muted-foreground">Ready to withdraw</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Earned</CardTitle>
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              ${wallet ? Number(wallet.totalEarnings).toFixed(2) : '0.00'}
+            </div>
+            <p className="text-xs text-muted-foreground">All-time winnings</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Withdrawn</CardTitle>
+            <ArrowUpRight className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              ${wallet ? Number(wallet.totalWithdrawn).toFixed(2) : '0.00'}
+            </div>
+            <p className="text-xs text-muted-foreground">Cash outs</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Transaction History</CardTitle>
+          <CardDescription>Your wallet activity in this league</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {!wallet || transactions.length === 0 ? (
+            <div className="text-center py-8">
+              <Wallet className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <p className="text-muted-foreground">No transactions yet</p>
+              <p className="text-sm text-muted-foreground">Earnings from payouts will appear here</p>
+            </div>
+          ) : (
+            <ScrollArea className="h-[300px]">
+              <div className="space-y-4">
+                {transactions.map((tx: any) => (
+                  <div key={tx.id} className="flex justify-between items-center border-b pb-2 last:border-0">
+                    <div>
+                      <p className="font-medium text-sm">{tx.description}</p>
+                      <p className="text-xs text-muted-foreground">{format(new Date(tx.createdAt), 'MMM d, yyyy')}</p>
+                    </div>
+                    <span className={`font-mono font-medium ${tx.type === 'credit' ? 'text-green-600' : 'text-red-600'}`}>
+                      {tx.type === 'credit' ? '+' : '-'}${Number(tx.amount).toFixed(2)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
