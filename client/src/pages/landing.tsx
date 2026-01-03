@@ -1,9 +1,11 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CheckCircle2, Shield, Trophy, Wallet } from "lucide-react";
-import { motion } from "framer-motion";
+import { CheckCircle2, Shield, Trophy, Wallet, Menu, X } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { useState } from "react";
 
 export default function Landing() {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const features = [
     {
       title: "Secure Payments",
@@ -24,8 +26,74 @@ export default function Landing() {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Mobile Header with Hamburger Menu */}
+      <header className="fixed top-0 left-0 right-0 z-50 md:hidden">
+        <div className="flex items-center justify-between p-4 bg-background/80 backdrop-blur-md border-b">
+          <span className="font-display font-bold text-xl text-primary">LeagueVault</span>
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            data-testid="button-mobile-menu"
+          >
+            {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+          </Button>
+        </div>
+        
+        <AnimatePresence>
+          {mobileMenuOpen && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="bg-background border-b shadow-lg"
+            >
+              <div className="flex flex-col p-4 gap-3">
+                <Button
+                  variant="outline"
+                  className="w-full justify-center"
+                  onClick={() => window.location.href = "/api/login"}
+                  data-testid="button-mobile-login"
+                >
+                  Login
+                </Button>
+                <Button
+                  className="w-full justify-center"
+                  onClick={() => window.location.href = "/api/login"}
+                  data-testid="button-mobile-signup"
+                >
+                  Sign Up
+                </Button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </header>
+
+      {/* Desktop Header */}
+      <header className="hidden md:block fixed top-0 left-0 right-0 z-50">
+        <div className="flex items-center justify-between p-4 bg-background/80 backdrop-blur-md border-b container mx-auto">
+          <span className="font-display font-bold text-xl text-primary">LeagueVault</span>
+          <div className="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              onClick={() => window.location.href = "/api/login"}
+              data-testid="button-desktop-login"
+            >
+              Login
+            </Button>
+            <Button
+              onClick={() => window.location.href = "/api/login"}
+              data-testid="button-desktop-signup"
+            >
+              Sign Up
+            </Button>
+          </div>
+        </div>
+      </header>
+
       {/* Hero Section */}
-      <div className="relative overflow-hidden">
+      <div className="relative overflow-hidden pt-16 md:pt-20">
         <div className="absolute inset-0 z-0">
           {/* Unsplash image of stadium lights at night */}
           {/* <!-- decorative background --> */}
