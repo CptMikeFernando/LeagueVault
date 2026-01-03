@@ -65,6 +65,7 @@ export default function LeagueDetail() {
   const leagueId = id ? parseInt(id) : 0;
   const { data: league, isLoading, error } = useLeague(leagueId);
   const { user } = useAuth();
+  const [demoMemberView, setDemoMemberView] = useState(false);
 
   if (!id || leagueId <= 0) {
     return (
@@ -106,7 +107,8 @@ export default function LeagueDetail() {
     );
   }
 
-  const isCommissioner = user?.id === league.commissionerId;
+  const isActualCommissioner = user?.id === league.commissionerId;
+  const isCommissioner = isActualCommissioner && !demoMemberView;
   const currentMember = league.members.find(m => m.userId === user?.id);
   const isMember = !!currentMember;
 
@@ -131,7 +133,20 @@ export default function LeagueDetail() {
             Commissioner: <span className="font-medium text-foreground">{league.commissionerId === user?.id ? "You" : "Commissioner"}</span>
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-4">
+          {isActualCommissioner && (
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted/50 border">
+              <span className="text-sm text-muted-foreground">Demo Member View</span>
+              <Switch 
+                checked={demoMemberView} 
+                onCheckedChange={setDemoMemberView}
+                data-testid="switch-demo-member-view"
+              />
+              {demoMemberView && (
+                <Badge variant="secondary" className="ml-1">Member Preview</Badge>
+              )}
+            </div>
+          )}
           {!isMember && (
             <Link href="/dashboard">
               <Button variant="default">Join League</Button>
