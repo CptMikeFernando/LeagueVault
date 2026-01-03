@@ -2121,10 +2121,11 @@ function EditLeagueNameDialog({ leagueId, currentName }: { leagueId: number; cur
 
 function ResendInviteButton({ leagueId, member }: { leagueId: number; member: any }) {
   const { toast } = useToast();
+  const [open, setOpen] = useState(false);
   
   const resendInvite = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest('POST', `/api/leagues/${leagueId}/members/${member.id}/resend-invite`);
+    mutationFn: async (method: 'sms' | 'email') => {
+      const res = await apiRequest('POST', `/api/leagues/${leagueId}/members/${member.id}/resend-invite`, { method });
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.message || 'Failed to resend invite');
@@ -2132,6 +2133,7 @@ function ResendInviteButton({ leagueId, member }: { leagueId: number; member: an
       return res.json();
     },
     onSuccess: (data) => {
+      setOpen(false);
       toast({ title: "Invite sent!", description: data.message || "Invite has been resent." });
     },
     onError: (err: any) => {
@@ -2139,22 +2141,65 @@ function ResendInviteButton({ leagueId, member }: { leagueId: number; member: an
     }
   });
 
-  const hasContact = member.phoneNumber || member.email;
+  const hasPhone = !!member.phoneNumber;
+  const hasEmail = !!member.email;
   
-  if (!hasContact) {
+  if (!hasPhone && !hasEmail) {
     return <span className="text-sm text-muted-foreground">No contact</span>;
   }
 
   return (
-    <Button
-      size="sm"
-      variant="outline"
-      onClick={() => resendInvite.mutate()}
-      disabled={resendInvite.isPending}
-      data-testid={`button-resend-invite-${member.id}`}
-    >
-      {resendInvite.isPending ? 'Sending...' : 'Resend'}
-    </Button>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button
+          size="sm"
+          variant="outline"
+          data-testid={`button-resend-invite-${member.id}`}
+        >
+          Resend
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Resend Invite</DialogTitle>
+          <DialogDescription>
+            Choose how to send the invite to this member.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex flex-col gap-3 py-4">
+          <Button
+            variant="outline"
+            className="justify-start gap-3"
+            onClick={() => resendInvite.mutate('sms')}
+            disabled={!hasPhone || resendInvite.isPending}
+            data-testid="button-resend-sms"
+          >
+            <Phone className="w-5 h-5" />
+            <div className="text-left">
+              <div className="font-medium">Send SMS</div>
+              <div className="text-sm text-muted-foreground">
+                {hasPhone ? 'Send text message invite' : 'No phone number on file'}
+              </div>
+            </div>
+          </Button>
+          <Button
+            variant="outline"
+            className="justify-start gap-3"
+            onClick={() => resendInvite.mutate('email')}
+            disabled={!hasEmail || resendInvite.isPending}
+            data-testid="button-resend-email"
+          >
+            <Mail className="w-5 h-5" />
+            <div className="text-left">
+              <div className="font-medium">Send Email</div>
+              <div className="text-sm text-muted-foreground">
+                {hasEmail ? 'Send email invite' : 'No email on file'}
+              </div>
+            </div>
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
