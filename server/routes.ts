@@ -891,9 +891,19 @@ export async function registerRoutes(
       const treasury = await storage.getLeagueTreasury(leagueId);
       const memberWallets = await storage.getLeagueWallets(leagueId);
       
+      // Enrich wallets with member names
+      const enrichedWallets = memberWallets.map(wallet => {
+        const member = league.members?.find((m: any) => m.userId === wallet.userId);
+        return {
+          ...wallet,
+          memberName: member?.ownerName || member?.teamName || `User ${wallet.userId.slice(0, 8)}`,
+          teamName: member?.teamName || null
+        };
+      });
+      
       res.json({
         ...treasury,
-        memberWallets,
+        memberWallets: enrichedWallets,
         leagueName: league.name
       });
     } catch (err) {

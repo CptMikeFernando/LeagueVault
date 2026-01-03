@@ -912,14 +912,14 @@ function TreasuryTab({ leagueId }: { leagueId: number }) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {memberWallets.map((wallet) => (
+                {memberWallets.map((wallet: any) => (
                   <TableRow key={wallet.id} data-testid={`row-wallet-${wallet.id}`}>
                     <TableCell className="font-medium">
-                      <div className="flex items-center gap-2">
-                        <Avatar className="h-8 w-8">
-                          <AvatarFallback>{wallet.userId.substring(0, 2).toUpperCase()}</AvatarFallback>
-                        </Avatar>
-                        User {wallet.userId.slice(0, 4)}...
+                      <div className="flex flex-col">
+                        <span>{wallet.memberName || `User ${wallet.userId.slice(0, 8)}`}</span>
+                        {wallet.teamName && wallet.teamName !== wallet.memberName && (
+                          <span className="text-xs text-muted-foreground">{wallet.teamName}</span>
+                        )}
                       </div>
                     </TableCell>
                     <TableCell className="text-right font-mono text-green-600">${Number(wallet.availableBalance).toFixed(2)}</TableCell>
