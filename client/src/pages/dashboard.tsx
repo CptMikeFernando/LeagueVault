@@ -35,11 +35,13 @@ export default function Dashboard() {
           <h1 className="text-3xl font-bold tracking-tight">Your Leagues</h1>
           <p className="text-muted-foreground">Manage your fantasy finances and payouts.</p>
         </div>
-        <div className="flex gap-3">
-          <JoinLeagueDialog />
-          <ImportLeagueDialog />
-          <Link href="/create-league">
-            <Button className="shadow-lg shadow-primary/20">
+        <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+          <div className="flex gap-3">
+            <JoinLeagueDialog />
+            <ImportLeagueDialog />
+          </div>
+          <Link href="/create-league" className="w-full sm:w-auto">
+            <Button className="shadow-lg shadow-primary/20 w-full sm:w-auto">
               <Plus className="w-4 h-4 mr-2" />
               Create League
             </Button>
