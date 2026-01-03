@@ -39,7 +39,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center group-hover:bg-primary/20 transition-colors">
               <Trophy className="w-6 h-6 text-primary" />
             </div>
-            <span className="font-display font-bold text-xl tracking-tight text-foreground">
+            <span className="font-display font-bold text-xl tracking-tight text-accent">
               League<span className="text-primary">Vault</span>
             </span>
           </Link>
