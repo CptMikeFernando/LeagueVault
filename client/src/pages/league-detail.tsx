@@ -183,11 +183,10 @@ export default function LeagueDetail() {
         <TabsList className="w-full justify-start border-b rounded-none h-auto p-0 bg-transparent gap-6">
           <TabsTrigger value="overview" className="data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-0 py-3 bg-transparent font-medium">Overview</TabsTrigger>
           <TabsTrigger value="members" className="data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-0 py-3 bg-transparent font-medium">Members</TabsTrigger>
-          <TabsTrigger value="finances" className="data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-0 py-3 bg-transparent font-medium">
-            {isCommissioner ? "Finances" : "My Wallet"}
-          </TabsTrigger>
+          <TabsTrigger value="my-wallet" className="data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-0 py-3 bg-transparent font-medium">My Wallet</TabsTrigger>
           {isCommissioner && (
             <>
+              <TabsTrigger value="finances" className="data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-0 py-3 bg-transparent font-medium">Finances</TabsTrigger>
               <TabsTrigger value="treasury" className="data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-0 py-3 bg-transparent font-medium" data-testid="tab-treasury">Treasury</TabsTrigger>
               <TabsTrigger value="tools" className="data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-0 py-3 bg-transparent font-medium">Commish Tools</TabsTrigger>
               <TabsTrigger value="settings" className="data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-0 py-3 bg-transparent font-medium" data-testid="tab-settings">Settings</TabsTrigger>
@@ -339,13 +338,15 @@ export default function LeagueDetail() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="finances">
-          {isCommissioner ? (
-            <FinancesTab league={league} />
-          ) : (
-            <MyWalletTab leagueId={leagueId} userId={user!.id} />
-          )}
+        <TabsContent value="my-wallet">
+          <MyWalletTab leagueId={leagueId} userId={user!.id} />
         </TabsContent>
+
+        {isCommissioner && (
+          <TabsContent value="finances">
+            <FinancesTab league={league} />
+          </TabsContent>
+        )}
 
         {isCommissioner && (
           <TabsContent value="treasury">
