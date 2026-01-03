@@ -182,6 +182,7 @@ export async function registerRoutes(
               userId: `espn-team-${league.id}-${team.id}`,
               role: 'member',
               teamName: team.name,
+              ownerName: team.ownerName || null,
               externalTeamId: team.id.toString(),
               paidStatus: 'unpaid'
             });

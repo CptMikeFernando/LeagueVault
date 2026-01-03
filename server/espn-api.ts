@@ -213,13 +213,26 @@ export async function fetchEspnLeagueInfo(
     
     const leagueName = data.settings?.name || `ESPN League ${leagueId}`;
     
+    // Build a map of member IDs to display names
+    const membersMap: Record<string, string> = {};
+    if (data.members && Array.isArray(data.members)) {
+      for (const member of data.members) {
+        if (member.id) {
+          membersMap[member.id] = member.displayName || `${member.firstName || ''} ${member.lastName || ''}`.trim() || null;
+        }
+      }
+    }
+    
     const teams = (data.teams || []).map((team: any) => {
       const teamName = team.name || (team.location && team.nickname ? `${team.location} ${team.nickname}`.trim() : `Team ${team.id}`);
+      // Get owner name by looking up primaryOwner or first owner in the members map
+      const ownerId = team.primaryOwner || team.owners?.[0];
+      const ownerName = ownerId ? membersMap[ownerId] : null;
       return {
         id: team.id,
         name: teamName,
         abbrev: team.abbrev || '',
-        ownerName: team.owners?.[0]?.displayName
+        ownerName
       };
     });
 
