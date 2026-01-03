@@ -194,34 +194,30 @@ export default function LeagueDetail() {
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
-          {/* My Status - Full Width */}
-          <Card>
-            <CardHeader>
-              <CardTitle>My Status</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {currentMember ? (
+          {/* My Status - Only show when member hasn't paid */}
+          {currentMember && currentMember.paidStatus !== 'paid' && (
+            <Card>
+              <CardHeader>
+                <CardTitle>My Status</CardTitle>
+              </CardHeader>
+              <CardContent>
                 <div className="flex items-center justify-between p-4 bg-muted/30 rounded-xl border">
                   <div className="flex items-center gap-4">
-                    <div className={`p-3 rounded-full ${currentMember.paidStatus === 'paid' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                      {currentMember.paidStatus === 'paid' ? <Trophy className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
+                    <div className="p-3 rounded-full bg-yellow-100 text-yellow-700">
+                      <AlertCircle className="w-5 h-5" />
                     </div>
                     <div>
                       <p className="font-medium">Team: {currentMember.teamName}</p>
                       <p className="text-sm text-muted-foreground">
-                        {currentMember.paidStatus === 'paid' ? "You're all paid up!" : `Dues owed: $${league.settings?.entryFee || league.settings?.seasonDues || 0}`}
+                        Dues owed: ${league.settings?.entryFee || league.settings?.seasonDues || 0}
                       </p>
                     </div>
                   </div>
-                  {currentMember.paidStatus !== 'paid' && (
-                     <PayDuesDialog league={league} userId={user!.id} amount={league.settings?.entryFee || league.settings?.seasonDues || 0} />
-                  )}
+                  <PayDuesDialog league={league} userId={user!.id} amount={league.settings?.entryFee || league.settings?.seasonDues || 0} />
                 </div>
-              ) : (
-                <p className="text-muted-foreground">You are not a member of this league.</p>
-              )}
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Row: Message Board + League Info */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
