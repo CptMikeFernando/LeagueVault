@@ -1649,6 +1649,40 @@ export async function registerRoutes(
     }
   });
 
+  // === DELETE LEAGUE MEMBER ===
+  app.delete("/api/leagues/:id/members/:memberId", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const leagueId = Number(req.params.id);
+      const memberId = Number(req.params.memberId);
+
+      const league = await storage.getLeague(leagueId);
+      if (!league) {
+        return res.status(404).json({ message: "League not found" });
+      }
+
+      if (league.commissionerId !== userId) {
+        return res.status(403).json({ message: "Only commissioners can remove members" });
+      }
+
+      const member = await storage.getLeagueMemberById(memberId);
+      if (!member || member.leagueId !== leagueId) {
+        return res.status(404).json({ message: "Member not found in this league" });
+      }
+
+      // Prevent commissioner from deleting themselves
+      if (member.userId === userId) {
+        return res.status(400).json({ message: "Cannot remove yourself from the league. Transfer commissioner role first." });
+      }
+
+      await storage.deleteLeagueMember(memberId);
+      res.json({ success: true, message: "Member removed from league" });
+    } catch (err) {
+      console.error("Error deleting member:", err);
+      res.status(500).json({ message: "Failed to remove member" });
+    }
+  });
+
   // === RESEND INVITE TO MEMBER ===
   app.post("/api/leagues/:id/members/:memberId/resend-invite", isAuthenticated, async (req: any, res) => {
     try {

@@ -49,6 +49,7 @@ export interface IStorage {
   getLeagueMemberById(id: number): Promise<LeagueMember | undefined>;
   updateMemberStatus(id: number, status: string): Promise<void>;
   updateMemberDetails(id: number, details: { teamName?: string | null; ownerName?: string | null; phoneNumber?: string | null; email?: string | null }): Promise<LeagueMember>;
+  deleteLeagueMember(id: number): Promise<void>;
 
   createPayment(payment: InsertPayment & { userId: string; status: string; stripePaymentIntentId?: string | null }): Promise<Payment>;
   createPayout(payout: InsertPayout & { status: string }): Promise<Payout>;
@@ -242,6 +243,10 @@ export class DatabaseStorage implements IStorage {
   
   async updateMemberStatus(id: number, status: string): Promise<void> {
     await db.update(leagueMembers).set({ paidStatus: status }).where(eq(leagueMembers.id, id));
+  }
+
+  async deleteLeagueMember(id: number): Promise<void> {
+    await db.delete(leagueMembers).where(eq(leagueMembers.id, id));
   }
 
   async createPayment(payment: InsertPayment & { userId: string; status: string; stripePaymentIntentId?: string | null }): Promise<Payment> {

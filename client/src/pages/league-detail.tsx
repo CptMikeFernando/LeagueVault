@@ -1952,6 +1952,7 @@ function EditMemberDialog({ leagueId, member }: { leagueId: number; member: any 
   const [ownerName, setOwnerName] = useState(member.ownerName || '');
   const [phoneNumber, setPhoneNumber] = useState(member.phoneNumber || '');
   const [email, setEmail] = useState(member.email || '');
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const { toast } = useToast();
 
   const updateMember = useMutation({
@@ -1978,6 +1979,27 @@ function EditMemberDialog({ leagueId, member }: { leagueId: number; member: any 
     }
   });
 
+  const deleteMember = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest('DELETE', `/api/leagues/${leagueId}/members/${member.id}`);
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || 'Failed to remove member');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/leagues', leagueId] });
+      toast({ title: "Member removed", description: "Member has been removed from the league." });
+      setOpen(false);
+      setShowDeleteConfirm(false);
+    },
+    onError: (err: any) => {
+      toast({ title: "Failed to remove", description: err.message, variant: "destructive" });
+      setShowDeleteConfirm(false);
+    }
+  });
+
   return (
     <Dialog open={open} onOpenChange={(isOpen) => {
       setOpen(isOpen);
@@ -1986,6 +2008,7 @@ function EditMemberDialog({ leagueId, member }: { leagueId: number; member: any 
         setOwnerName(member.ownerName || '');
         setPhoneNumber(member.phoneNumber || '');
         setEmail(member.email || '');
+        setShowDeleteConfirm(false);
       }
     }}>
       <DialogTrigger asChild>
@@ -2041,15 +2064,50 @@ function EditMemberDialog({ leagueId, member }: { leagueId: number; member: any 
             </div>
           </div>
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-          <Button
-            onClick={() => updateMember.mutate()}
-            disabled={updateMember.isPending}
-            data-testid="button-save-member"
-          >
-            {updateMember.isPending ? 'Saving...' : 'Save Changes'}
-          </Button>
+        <DialogFooter className="flex justify-between gap-2">
+          <div>
+            {!showDeleteConfirm ? (
+              <Button 
+                variant="destructive" 
+                onClick={() => setShowDeleteConfirm(true)}
+                data-testid="button-delete-member"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Remove Member
+              </Button>
+            ) : (
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-destructive">Are you sure?</span>
+                <Button 
+                  variant="destructive" 
+                  size="sm"
+                  onClick={() => deleteMember.mutate()}
+                  disabled={deleteMember.isPending}
+                  data-testid="button-confirm-delete-member"
+                >
+                  {deleteMember.isPending ? 'Removing...' : 'Yes, Remove'}
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setShowDeleteConfirm(false)}
+                  data-testid="button-cancel-delete-member"
+                >
+                  No
+                </Button>
+              </div>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button
+              onClick={() => updateMember.mutate()}
+              disabled={updateMember.isPending}
+              data-testid="button-save-member"
+            >
+              {updateMember.isPending ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
