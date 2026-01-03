@@ -214,11 +214,14 @@ export async function fetchEspnLeagueInfo(
     const leagueName = data.settings?.name || `ESPN League ${leagueId}`;
     
     // Build a map of member IDs to display names
+    // Prioritize firstName/lastName over displayName since displayName is often a username like "ESPNFAN0867177549"
     const membersMap: Record<string, string> = {};
     if (data.members && Array.isArray(data.members)) {
       for (const member of data.members) {
         if (member.id) {
-          membersMap[member.id] = member.displayName || `${member.firstName || ''} ${member.lastName || ''}`.trim() || null;
+          const fullName = `${member.firstName || ''} ${member.lastName || ''}`.trim();
+          // Use full name if available, otherwise fall back to displayName
+          membersMap[member.id] = fullName || member.displayName || null;
         }
       }
     }
