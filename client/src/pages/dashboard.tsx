@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlertCircle, ArrowRight, DollarSign, Plus, Trophy, Users } from "lucide-react";
+import { AlertCircle, ArrowRight, DollarSign, Plus, Trophy, TrendingDown, Users } from "lucide-react";
 import { useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -80,9 +80,17 @@ export default function Dashboard() {
                     {(league.settings?.weeklyHighScorePrize || league.settings?.weeklyPayoutAmount) && (league.settings.weeklyHighScorePrize || league.settings.weeklyPayoutAmount || 0) > 0 && (
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-muted-foreground flex items-center gap-2">
-                          <Trophy className="w-4 h-4" /> Weekly Prize
+                          <Trophy className="w-4 h-4" /> HPS Weekly Prize
                         </span>
                         <span className="font-mono">${league.settings?.weeklyHighScorePrize || league.settings?.weeklyPayoutAmount}</span>
+                      </div>
+                    )}
+                    {league.settings?.lpsEnabled && league.settings?.lpsFeeAmount && Number(league.settings.lpsFeeAmount) > 0 && (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground flex items-center gap-2">
+                          <TrendingDown className="w-4 h-4" /> LPS Weekly Fee
+                        </span>
+                        <span className="font-mono">${league.settings.lpsFeeAmount}</span>
                       </div>
                     )}
                   </div>
