@@ -302,8 +302,7 @@ export default function LeagueDetail() {
                       <TableHead>Team</TableHead>
                       <TableHead>Role</TableHead>
                       <TableHead>Status</TableHead>
-                      {isCommissioner && <TableHead>Invite</TableHead>}
-                      {isCommissioner && <TableHead>Remind</TableHead>}
+                      {isCommissioner && <TableHead>Payment</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -326,12 +325,7 @@ export default function LeagueDetail() {
                         </TableCell>
                         {isCommissioner && (
                           <TableCell>
-                            <SendInviteButton leagueId={league.id} member={member} />
-                          </TableCell>
-                        )}
-                        {isCommissioner && (
-                          <TableCell>
-                            <SendReminderButton leagueId={league.id} memberId={member.id} hasPhone={!!member.phoneNumber} hasEmail={!!member.email} paidStatus={member.paidStatus} />
+                            <SendReminderButton leagueId={league.id} member={member} />
                           </TableCell>
                         )}
                       </TableRow>
@@ -2503,7 +2497,7 @@ function EditLeagueNameDialog({ leagueId, currentName }: { leagueId: number; cur
   );
 }
 
-function SendInviteButton({ leagueId, member }: { leagueId: number; member: any }) {
+function SendReminderButton({ leagueId, member }: { leagueId: number; member: any }) {
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [phoneNumber, setPhoneNumber] = useState(member.phoneNumber || "");
@@ -2524,11 +2518,11 @@ function SendInviteButton({ leagueId, member }: { leagueId: number; member: any 
         }
       }
       
-      // Then send the invite
-      const res = await apiRequest('POST', `/api/leagues/${leagueId}/members/${member.id}/resend-invite`, { method });
+      // Then send the reminder
+      const res = await apiRequest('POST', `/api/leagues/${leagueId}/members/${member.id}/remind`, { method });
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.message || 'Failed to send invite');
+        throw new Error(data.message || 'Failed to send reminder');
       }
       return res.json();
     },
@@ -2536,7 +2530,7 @@ function SendInviteButton({ leagueId, member }: { leagueId: number; member: any 
       setOpen(false);
       setSendMethod(null);
       queryClient.invalidateQueries({ queryKey: ['/api/leagues', leagueId] });
-      toast({ title: "Invite sent!", description: data.message || "Invite has been sent." });
+      toast({ title: "Reminder sent!", description: `Payment reminder sent via ${data.method === 'sms' ? 'SMS' : 'Email'}` });
     },
     onError: (err: any) => {
       toast({ title: "Failed", description: err.message, variant: "destructive" });
@@ -2570,22 +2564,26 @@ function SendInviteButton({ leagueId, member }: { leagueId: number; member: any 
   const hasPhone = !!member.phoneNumber;
   const hasEmail = !!member.email;
 
+  if (member.paidStatus === 'paid') {
+    return <span className="text-sm text-green-600 font-medium">Paid</span>;
+  }
+
   return (
     <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setSendMethod(null); }}>
       <DialogTrigger asChild>
         <Button
           size="sm"
           variant="outline"
-          data-testid={`button-send-invite-${member.id}`}
+          data-testid={`button-remind-${member.id}`}
         >
-          Send
+          Remind
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Send Invite</DialogTitle>
+          <DialogTitle>Send Payment Reminder</DialogTitle>
           <DialogDescription>
-            Send an invite to {member.ownerName || member.teamName}
+            Send a reminder to {member.ownerName || member.teamName}
           </DialogDescription>
         </DialogHeader>
         
@@ -2596,7 +2594,7 @@ function SendInviteButton({ leagueId, member }: { leagueId: number; member: any 
               className="justify-start gap-3"
               onClick={() => handleSend('sms')}
               disabled={updateAndSend.isPending}
-              data-testid="button-send-sms"
+              data-testid="button-remind-sms"
             >
               <Phone className="w-5 h-5" />
               <div className="text-left">
@@ -2611,7 +2609,7 @@ function SendInviteButton({ leagueId, member }: { leagueId: number; member: any 
               className="justify-start gap-3"
               onClick={() => handleSend('email')}
               disabled={updateAndSend.isPending}
-              data-testid="button-send-email"
+              data-testid="button-remind-email"
             >
               <Mail className="w-5 h-5" />
               <div className="text-left">
@@ -2631,7 +2629,7 @@ function SendInviteButton({ leagueId, member }: { leagueId: number; member: any 
                   placeholder="+1 (555) 123-4567"
                   value={phoneNumber}
                   onChange={(e) => setPhoneNumber(e.target.value)}
-                  data-testid="input-invite-phone"
+                  data-testid="input-remind-phone"
                 />
               </div>
             ) : (
@@ -2642,7 +2640,7 @@ function SendInviteButton({ leagueId, member }: { leagueId: number; member: any 
                   placeholder="member@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  data-testid="input-invite-email"
+                  data-testid="input-remind-email"
                 />
               </div>
             )}
@@ -2651,105 +2649,15 @@ function SendInviteButton({ leagueId, member }: { leagueId: number; member: any 
               <Button 
                 onClick={handleSubmitContact}
                 disabled={updateAndSend.isPending || (sendMethod === 'sms' ? !phoneNumber : !email)}
-                data-testid="button-submit-invite"
+                data-testid="button-submit-remind"
               >
-                {updateAndSend.isPending ? 'Sending...' : 'Send Invite'}
+                {updateAndSend.isPending ? 'Sending...' : 'Send Reminder'}
               </Button>
             </DialogFooter>
           </div>
         )}
         
         {updateAndSend.isPending && !sendMethod && (
-          <div className="text-center text-sm text-muted-foreground">Sending...</div>
-        )}
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function SendReminderButton({ leagueId, memberId, hasPhone, hasEmail, paidStatus }: { leagueId: number; memberId: number; hasPhone: boolean; hasEmail: boolean; paidStatus: string }) {
-  const { toast } = useToast();
-  const [open, setOpen] = useState(false);
-
-  const sendReminder = useMutation({
-    mutationFn: async (method: 'sms' | 'email') => {
-      const res = await apiRequest('POST', `/api/leagues/${leagueId}/members/${memberId}/remind`, { method });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.message || 'Failed to send reminder');
-      }
-      return res.json();
-    },
-    onSuccess: (data) => {
-      setOpen(false);
-      toast({ title: "Reminder sent!", description: `Payment reminder sent via ${data.method === 'sms' ? 'SMS' : 'Email'}` });
-    },
-    onError: (err: any) => {
-      toast({ title: "Failed", description: err.message, variant: "destructive" });
-    }
-  });
-
-  if (paidStatus === 'paid') {
-    return <span className="text-sm text-green-600 font-medium">Complete</span>;
-  }
-
-  if (!hasPhone && !hasEmail) {
-    return (
-      <span className="text-sm text-muted-foreground">No contact</span>
-    );
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button
-          size="sm"
-          variant="outline"
-          data-testid={`button-remind-${memberId}`}
-        >
-          Send Reminder
-        </Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Send Payment Reminder</DialogTitle>
-          <DialogDescription>
-            Choose how to send the reminder to this member.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="flex flex-col gap-3 py-4">
-          <Button
-            variant="outline"
-            className="justify-start gap-3"
-            onClick={() => sendReminder.mutate('sms')}
-            disabled={!hasPhone || sendReminder.isPending}
-            data-testid="button-remind-sms"
-          >
-            <Phone className="w-5 h-5" />
-            <div className="text-left">
-              <div className="font-medium">Send SMS</div>
-              <div className="text-sm text-muted-foreground">
-                {hasPhone ? 'Send text message reminder' : 'No phone number on file'}
-              </div>
-            </div>
-          </Button>
-          <Button
-            variant="outline"
-            className="justify-start gap-3"
-            onClick={() => sendReminder.mutate('email')}
-            disabled={!hasEmail || sendReminder.isPending}
-            data-testid="button-remind-email"
-          >
-            <Mail className="w-5 h-5" />
-            <div className="text-left">
-              <div className="font-medium">Send Email</div>
-              <div className="text-sm text-muted-foreground">
-                {hasEmail ? 'Send email reminder' : 'No email on file'}
-              </div>
-            </div>
-          </Button>
-        </div>
-        {sendReminder.isPending && (
           <div className="text-center text-sm text-muted-foreground">Sending...</div>
         )}
       </DialogContent>
