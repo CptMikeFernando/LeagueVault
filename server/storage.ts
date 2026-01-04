@@ -255,6 +255,10 @@ export class DatabaseStorage implements IStorage {
     await db.update(leagueMembers).set({ paidStatus: status }).where(eq(leagueMembers.id, id));
   }
 
+  async updateMemberPaymentRequestSent(id: number, sent: boolean): Promise<void> {
+    await db.update(leagueMembers).set({ paymentRequestSent: sent }).where(eq(leagueMembers.id, id));
+  }
+
   async deleteLeagueMember(id: number): Promise<void> {
     await db.delete(leagueMembers).where(eq(leagueMembers.id, id));
   }

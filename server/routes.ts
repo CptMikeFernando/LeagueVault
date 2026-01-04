@@ -2025,8 +2025,8 @@ export async function registerRoutes(
         }
 
         if (sent) {
-          // Update member status to 'sent'
-          await storage.updateMemberStatus(member.id, 'sent');
+          // Mark that payment request was sent (don't change paidStatus)
+          await storage.updateMemberPaymentRequestSent(member.id, true);
           sentCount++;
         } else {
           skippedCount++;

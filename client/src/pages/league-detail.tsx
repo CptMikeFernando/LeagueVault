@@ -321,8 +321,8 @@ export default function LeagueDetail() {
                         <TableCell className="capitalize">{member.role}</TableCell>
                         <TableCell>
                           <Badge 
-                            variant={member.paidStatus === 'paid' ? 'default' : member.paidStatus === 'sent' ? 'default' : 'destructive'} 
-                            className={`capitalize ${member.paidStatus === 'sent' ? 'bg-green-600 text-white' : ''}`}
+                            variant={member.paidStatus === 'paid' ? 'default' : 'destructive'} 
+                            className="capitalize"
                           >
                             {member.paidStatus}
                           </Badge>
@@ -2475,6 +2475,15 @@ function SendReminderButton({ leagueId, member }: { leagueId: number; member: an
 
   if (member.paidStatus === 'paid') {
     return <span className="text-sm text-green-600 font-medium">Paid</span>;
+  }
+
+  // Show "Sent" if payment request was already sent
+  if (member.paymentRequestSent) {
+    return (
+      <Badge className="bg-green-600 text-white" data-testid={`badge-sent-${member.id}`}>
+        Sent
+      </Badge>
+    );
   }
 
   return (

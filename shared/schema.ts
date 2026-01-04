@@ -61,6 +61,7 @@ export const leagueMembers = pgTable("league_members", {
   phoneNumber: text("phone_number"), // For SMS payment reminders
   email: text("email"), // For email reminders/invites
   paidStatus: text("paid_status").notNull().default("unpaid"), // 'paid', 'unpaid', 'partial'
+  paymentRequestSent: boolean("payment_request_sent").notNull().default(false), // Track if payment request was sent
   joinedAt: timestamp("joined_at").defaultNow(),
 });
 
