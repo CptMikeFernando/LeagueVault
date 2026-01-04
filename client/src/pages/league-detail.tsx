@@ -2604,7 +2604,7 @@ function SendReminderButton({ leagueId, member }: { leagueId: number; member: an
   const hasEmail = !!member.email;
 
   if (member.paidStatus === 'paid') {
-    return <span className="text-sm text-green-600 font-medium">Paid</span>;
+    return <Badge className="bg-green-600 hover:bg-green-700 text-white">Complete</Badge>;
   }
 
   // Show "Sent" if payment request was sent within last 24 hours
