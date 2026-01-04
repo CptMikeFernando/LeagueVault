@@ -386,36 +386,12 @@ export default function LeagueDetail() {
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
-                       <Trophy className="w-5 h-5 text-yellow-500" /> Record Weekly Score
-                    </CardTitle>
-                    <CardDescription>Log high scores for automation.</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <WeeklyScoreForm league={league} />
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
                        <RefreshCw className="w-5 h-5 text-blue-500" /> Sync Scores
                     </CardTitle>
                     <CardDescription>Pull scores from {league.platform === 'custom' ? 'manual input' : league.platform.toUpperCase()}.</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <SyncScoresForm league={league} />
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                       <Phone className="w-5 h-5 text-green-500" /> Payment Reminders
-                    </CardTitle>
-                    <CardDescription>Send SMS reminders to unpaid members.</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <SendRemindersForm league={league} />
                   </CardContent>
                 </Card>
              </div>
