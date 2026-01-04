@@ -53,7 +53,8 @@ import {
   Check,
   ExternalLink,
   Loader2,
-  Clock
+  Clock,
+  DollarSign
 } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useState } from "react";
@@ -291,7 +292,7 @@ export default function LeagueDetail() {
                 <CardTitle>League Members</CardTitle>
                 <CardDescription>{league.members.length} teams competing</CardDescription>
               </div>
-              {isCommissioner && <InviteMemberDialog leagueId={league.id} />}
+              {isCommissioner && <RequestAllPaymentsButton leagueId={league.id} />}
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="overflow-x-auto">
@@ -319,7 +320,10 @@ export default function LeagueDetail() {
                         <TableCell className="truncate max-w-[100px]">{member.teamName}</TableCell>
                         <TableCell className="capitalize">{member.role}</TableCell>
                         <TableCell>
-                          <Badge variant={member.paidStatus === 'paid' ? 'default' : 'destructive'} className="capitalize">
+                          <Badge 
+                            variant={member.paidStatus === 'paid' ? 'default' : member.paidStatus === 'sent' ? 'default' : 'destructive'} 
+                            className={`capitalize ${member.paidStatus === 'sent' ? 'bg-green-600 text-white' : ''}`}
+                          >
                             {member.paidStatus}
                           </Badge>
                         </TableCell>
@@ -2135,134 +2139,39 @@ function DeleteLeagueSection({ league }: { league: any }) {
   );
 }
 
-function InviteMemberDialog({ leagueId }: { leagueId: number }) {
-  const [open, setOpen] = useState(false);
-  const [contactType, setContactType] = useState<'phone' | 'email'>('phone');
-  const [contactValue, setContactValue] = useState('');
-  const [teamName, setTeamName] = useState('');
-  const [ownerName, setOwnerName] = useState('');
+function RequestAllPaymentsButton({ leagueId }: { leagueId: number }) {
   const { toast } = useToast();
 
-  const sendInvite = useMutation({
+  const requestAllPayments = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest('POST', `/api/leagues/${leagueId}/invites`, {
-        contactType,
-        contactValue,
-        teamName: teamName.trim() || undefined,
-        ownerName: ownerName.trim() || undefined
-      });
+      const res = await apiRequest('POST', `/api/leagues/${leagueId}/request-all-payments`);
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.message || 'Failed to send invite');
+        throw new Error(data.message || 'Failed to request payments');
       }
       return res.json();
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/leagues', leagueId, 'invites'] });
       queryClient.invalidateQueries({ queryKey: ['/api/leagues', leagueId] });
-      
-      if (data.emailNotConfigured) {
-        toast({ 
-          title: "Member added", 
-          description: "Member was added to the league. Email sending is not configured yet - please share the invite link manually.",
-          variant: "default"
-        });
-      } else if (data.inviteSent) {
-        toast({ title: "Invite sent!", description: `Invitation sent via ${data.inviteMethod === 'sms' ? 'SMS' : 'email'}` });
-      } else {
-        toast({ 
-          title: "Member added", 
-          description: "Member was added but the notification could not be sent. Please contact them directly.",
-          variant: "default"
-        });
-      }
-      
-      setOpen(false);
-      setContactValue('');
-      setTeamName('');
-      setOwnerName('');
+      toast({ 
+        title: "Payment requests sent!", 
+        description: `Sent ${data.sentCount} payment request${data.sentCount !== 1 ? 's' : ''}. ${data.skippedCount} member${data.skippedCount !== 1 ? 's' : ''} had no contact info.`
+      });
     },
     onError: (err: any) => {
-      toast({ title: "Failed to send invite", description: err.message, variant: "destructive" });
+      toast({ title: "Failed", description: err.message, variant: "destructive" });
     }
   });
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button data-testid="button-invite-member">
-          <UserPlus className="w-4 h-4 mr-2" />
-          Invite Members
-        </Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Invite a Member</DialogTitle>
-          <DialogDescription>Send an invite via phone number or email address</DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label>Team Name</Label>
-              <Input
-                placeholder="Team Thunderbolts"
-                value={teamName}
-                onChange={(e) => setTeamName(e.target.value)}
-                data-testid="input-invite-team-name"
-              />
-            </div>
-            <div>
-              <Label>Owner Name</Label>
-              <Input
-                placeholder="John Smith"
-                value={ownerName}
-                onChange={(e) => setOwnerName(e.target.value)}
-                data-testid="input-invite-owner-name"
-              />
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <Button
-              variant={contactType === 'phone' ? 'default' : 'outline'}
-              onClick={() => setContactType('phone')}
-              className="flex-1"
-              data-testid="button-invite-phone"
-            >
-              <Phone className="w-4 h-4 mr-2" />
-              Phone
-            </Button>
-            <Button
-              variant={contactType === 'email' ? 'default' : 'outline'}
-              onClick={() => setContactType('email')}
-              className="flex-1"
-              data-testid="button-invite-email"
-            >
-              <Mail className="w-4 h-4 mr-2" />
-              Email
-            </Button>
-          </div>
-          <div>
-            <Label>{contactType === 'phone' ? 'Phone Number' : 'Email Address'}</Label>
-            <Input
-              placeholder={contactType === 'phone' ? '+1234567890' : 'member@example.com'}
-              value={contactValue}
-              onChange={(e) => setContactValue(e.target.value)}
-              data-testid="input-invite-contact"
-            />
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-          <Button
-            onClick={() => sendInvite.mutate()}
-            disabled={!contactValue.trim() || sendInvite.isPending}
-            data-testid="button-send-invite"
-          >
-            {sendInvite.isPending ? 'Sending...' : 'Send Invite'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <Button 
+      onClick={() => requestAllPayments.mutate()}
+      disabled={requestAllPayments.isPending}
+      data-testid="button-request-all-payments"
+    >
+      <DollarSign className="w-4 h-4 mr-2" />
+      {requestAllPayments.isPending ? 'Sending...' : 'Request All Payments'}
+    </Button>
   );
 }
 

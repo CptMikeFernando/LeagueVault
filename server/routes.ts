@@ -1966,6 +1966,80 @@ export async function registerRoutes(
     }
   });
 
+  // === REQUEST ALL PAYMENTS ===
+  app.post("/api/leagues/:id/request-all-payments", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const leagueId = Number(req.params.id);
+
+      const league = await storage.getLeague(leagueId);
+      if (!league) {
+        return res.status(404).json({ message: "League not found" });
+      }
+
+      if (league.commissionerId !== userId) {
+        return res.status(403).json({ message: "Only commissioners can request payments" });
+      }
+
+      const baseUrl = process.env.REPLIT_DEV_DOMAIN 
+        ? `https://${process.env.REPLIT_DEV_DOMAIN}` 
+        : 'https://your-app.replit.app';
+      const leagueUrl = `${baseUrl}/leagues/${leagueId}`;
+
+      let sentCount = 0;
+      let skippedCount = 0;
+
+      const { sendSMS, isTwilioConfigured } = await import('./twilio');
+      const { sendReminderEmail } = await import('./sendgrid');
+      const twilioReady = await isTwilioConfigured();
+
+      for (const member of league.members || []) {
+        // Skip already paid members
+        if (member.paidStatus === 'paid') continue;
+
+        const hasPhone = !!member.phoneNumber;
+        const hasEmail = !!member.email;
+
+        if (!hasPhone && !hasEmail) {
+          skippedCount++;
+          continue;
+        }
+
+        let sent = false;
+
+        // Try SMS first if available
+        if (hasPhone && twilioReady) {
+          const message = `Hey, nerd. You still haven't paid your dues for ${league.name}. Pay up or shut up.\n\n${leagueUrl}`;
+          const smsResult = await sendSMS(member.phoneNumber, message);
+          if (smsResult.success) {
+            sent = true;
+          }
+        }
+
+        // Try email if SMS wasn't sent or failed
+        if (!sent && hasEmail) {
+          const result = await sendReminderEmail(member.email, league.name, leagueUrl);
+          if (result.success) {
+            sent = true;
+          }
+        }
+
+        if (sent) {
+          // Update member status to 'sent'
+          await storage.updateMemberStatus(member.id, 'sent');
+          sentCount++;
+        } else {
+          skippedCount++;
+        }
+      }
+
+      res.json({ success: true, sentCount, skippedCount });
+    } catch (err) {
+      console.error("Error requesting all payments:", err);
+      res.status(500).json({ message: "Failed to request payments" });
+    }
+  });
+
   // === INDIVIDUAL PAYMENT REMINDER ===
   app.post("/api/leagues/:id/members/:memberId/remind", isAuthenticated, async (req: any, res) => {
     try {
