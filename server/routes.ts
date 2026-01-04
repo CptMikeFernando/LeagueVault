@@ -1124,6 +1124,106 @@ export async function registerRoutes(
     }
   });
 
+  // === STRIPE CONNECT (for receiving payouts) ===
+  
+  // Get user's Stripe Connect status
+  app.get("/api/stripe/connect/status", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      res.json({
+        hasConnectAccount: !!user.stripeConnectAccountId,
+        isOnboarded: !!user.stripeConnectOnboarded,
+        accountId: user.stripeConnectAccountId || null
+      });
+    } catch (err) {
+      console.error("Error getting Connect status:", err);
+      res.status(500).json({ message: "Failed to get Connect status" });
+    }
+  });
+
+  // Create Stripe Connect account and get onboarding link
+  app.post("/api/stripe/connect/onboard", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const stripe = await getUncachableStripeClient();
+      let accountId = user.stripeConnectAccountId;
+
+      // Create Connect account if doesn't exist
+      if (!accountId) {
+        const account = await stripe.accounts.create({
+          type: 'express',
+          email: user.email || undefined,
+          metadata: {
+            userId: userId
+          },
+          capabilities: {
+            transfers: { requested: true },
+          },
+        });
+        accountId = account.id;
+        
+        // Save the account ID
+        await storage.updateUserStripeConnect(userId, accountId);
+      }
+
+      // Create account onboarding link
+      const baseUrl = req.headers.origin || `https://${req.get('host')}`;
+      const accountLink = await stripe.accountLinks.create({
+        account: accountId,
+        refresh_url: `${baseUrl}/wallet?connect=refresh`,
+        return_url: `${baseUrl}/wallet?connect=success`,
+        type: 'account_onboarding',
+      });
+
+      res.json({ url: accountLink.url });
+    } catch (err) {
+      console.error("Error creating Connect onboarding:", err);
+      res.status(500).json({ message: "Failed to start onboarding" });
+    }
+  });
+
+  // Check if Connect onboarding is complete
+  app.post("/api/stripe/connect/verify", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (!user?.stripeConnectAccountId) {
+        return res.json({ verified: false, message: "No Connect account" });
+      }
+
+      const stripe = await getUncachableStripeClient();
+      const account = await stripe.accounts.retrieve(user.stripeConnectAccountId);
+
+      // Check if onboarding is complete
+      if (account.details_submitted && account.payouts_enabled) {
+        await storage.updateUserStripeConnectOnboarded(userId);
+        return res.json({ verified: true });
+      }
+
+      res.json({ 
+        verified: false, 
+        detailsSubmitted: account.details_submitted,
+        payoutsEnabled: account.payouts_enabled
+      });
+    } catch (err) {
+      console.error("Error verifying Connect account:", err);
+      res.status(500).json({ message: "Failed to verify account" });
+    }
+  });
+
   // === ESPN INTEGRATION ===
   // Fetch ESPN teams for mapping
   app.get("/api/leagues/:id/espn-teams", isAuthenticated, async (req: any, res) => {

@@ -24,6 +24,8 @@ import { authStorage } from "./replit_integrations/auth/storage";
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   updateUserRole(id: string, role: string): Promise<void>;
+  updateUserStripeConnect(id: string, accountId: string): Promise<void>;
+  updateUserStripeConnectOnboarded(id: string): Promise<void>;
   isUserAdmin(id: string): Promise<boolean>;
 
   // Admin methods
@@ -126,6 +128,14 @@ export class DatabaseStorage implements IStorage {
 
   async updateUserRole(id: string, role: string): Promise<void> {
     await db.update(users).set({ role }).where(eq(users.id, id));
+  }
+
+  async updateUserStripeConnect(id: string, accountId: string): Promise<void> {
+    await db.update(users).set({ stripeConnectAccountId: accountId }).where(eq(users.id, id));
+  }
+
+  async updateUserStripeConnectOnboarded(id: string): Promise<void> {
+    await db.update(users).set({ stripeConnectOnboarded: new Date() }).where(eq(users.id, id));
   }
 
   async isUserAdmin(id: string): Promise<boolean> {

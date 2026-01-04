@@ -59,6 +59,7 @@ import { Switch } from "@/components/ui/switch";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
+import { StripeCheckout } from "@/components/stripe-checkout";
 
 export default function LeagueDetail() {
   const { id } = useParams<{ id: string }>();
@@ -512,14 +513,21 @@ function PayoutCalculatorCard({ league }: { league: any }) {
 function PayDuesDialog({ league, userId, amount }: { league: any, userId: string, amount: number }) {
   const [isOpen, setIsOpen] = useState(false);
   const createPayment = useCreatePayment();
+  const { toast } = useToast();
 
-  const handlePay = () => {
+  const handleSuccess = () => {
     createPayment.mutate({
       leagueId: league.id,
       userId,
       amount: amount,
     }, {
-      onSuccess: () => setIsOpen(false)
+      onSuccess: () => {
+        setIsOpen(false);
+        toast({
+          title: "Payment Successful",
+          description: "Your dues have been paid. Thank you!",
+        });
+      }
     });
   };
 
@@ -528,29 +536,23 @@ function PayDuesDialog({ league, userId, amount }: { league: any, userId: string
       <DialogTrigger asChild>
         <Button size="sm">Pay Dues</Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Secure Checkout</DialogTitle>
           <DialogDescription>Pay your season dues securely via Stripe.</DialogDescription>
         </DialogHeader>
-        <div className="py-6 space-y-4">
-          <div className="flex justify-between items-center text-lg font-medium">
+        <div className="py-4 space-y-4">
+          <div className="flex justify-between items-center text-lg font-medium border-b pb-3">
              <span>Season Dues</span>
-             <span>${amount}</span>
+             <span className="text-primary font-bold">${amount}</span>
           </div>
-          <div className="bg-muted p-4 rounded border flex items-center gap-3">
-            <CreditCard className="w-6 h-6" />
-            <div className="text-sm">
-               <p className="font-medium">Mock Payment Method</p>
-               <p className="text-muted-foreground">•••• •••• •••• 4242</p>
-            </div>
-          </div>
+          <StripeCheckout
+            amount={amount}
+            leagueId={league.id}
+            onSuccess={handleSuccess}
+            onCancel={() => setIsOpen(false)}
+          />
         </div>
-        <DialogFooter>
-          <Button onClick={handlePay} disabled={createPayment.isPending} className="w-full">
-            {createPayment.isPending ? "Processing..." : `Pay $${amount}`}
-          </Button>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

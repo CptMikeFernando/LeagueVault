@@ -12,11 +12,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Wallet, ArrowDownLeft, ArrowUpRight, Building, Zap, Clock, AlertCircle } from "lucide-react";
-import { useState } from "react";
+import { Wallet, ArrowDownLeft, ArrowUpRight, Building, Zap, Clock, AlertCircle, CreditCard, Check, ExternalLink, Loader2 } from "lucide-react";
+import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 
 interface MemberWallet {
   id: number;
@@ -53,6 +53,7 @@ interface WithdrawalRequest {
 export default function MyWallet() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const [location] = useLocation();
   const [selectedWalletId, setSelectedWalletId] = useState<number | null>(null);
   const [withdrawAmount, setWithdrawAmount] = useState("");
   const [withdrawType, setWithdrawType] = useState<'standard' | 'instant'>('standard');
@@ -61,6 +62,54 @@ export default function MyWallet() {
   const { data: wallets = [], isLoading: walletsLoading } = useQuery<MemberWallet[]>({
     queryKey: ['/api/wallets/me'],
   });
+
+  const { data: connectStatus, isLoading: connectLoading, refetch: refetchConnectStatus } = useQuery<{
+    hasConnectAccount: boolean;
+    isOnboarded: boolean;
+    accountId: string | null;
+  }>({
+    queryKey: ['/api/stripe/connect/status'],
+  });
+
+  const connectOnboardMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/stripe/connect/onboard", {});
+      return res.json();
+    },
+    onSuccess: (data) => {
+      if (data.url) {
+        window.location.href = data.url;
+      }
+    },
+    onError: (err: any) => {
+      toast({ title: "Failed to start onboarding", description: err.message, variant: "destructive" });
+    }
+  });
+
+  const verifyConnectMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/stripe/connect/verify", {});
+      return res.json();
+    },
+    onSuccess: (data) => {
+      if (data.verified) {
+        toast({ title: "Bank account connected!", description: "You can now receive payouts." });
+        refetchConnectStatus();
+      }
+    }
+  });
+
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const connectParam = urlParams.get('connect');
+    if (connectParam === 'success') {
+      verifyConnectMutation.mutate();
+      window.history.replaceState({}, '', '/wallet');
+    } else if (connectParam === 'refresh') {
+      toast({ title: "Onboarding incomplete", description: "Please complete the bank connection process.", variant: "destructive" });
+      window.history.replaceState({}, '', '/wallet');
+    }
+  }, []);
 
   const { data: withdrawals = [], isLoading: withdrawalsLoading } = useQuery<WithdrawalRequest[]>({
     queryKey: ['/api/withdrawals/me'],
@@ -167,6 +216,7 @@ export default function MyWallet() {
         <TabsList>
           <TabsTrigger value="wallets" data-testid="tab-wallets">League Wallets</TabsTrigger>
           <TabsTrigger value="withdrawals" data-testid="tab-withdrawals">Withdrawal History</TabsTrigger>
+          <TabsTrigger value="payment-settings" data-testid="tab-payment-settings">Payment Settings</TabsTrigger>
         </TabsList>
 
         <TabsContent value="wallets" className="space-y-4">
@@ -375,6 +425,99 @@ export default function MyWallet() {
                   </Table>
                 </ScrollArea>
               )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="payment-settings" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Building className="h-5 w-5" />
+                Bank Account for Payouts
+              </CardTitle>
+              <CardDescription>
+                Connect your bank account to receive winnings and payouts directly
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {connectLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : connectStatus?.isOnboarded ? (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3 p-4 bg-green-50 dark:bg-green-900/20 rounded-md border border-green-200 dark:border-green-800">
+                    <Check className="h-6 w-6 text-green-600" />
+                    <div>
+                      <p className="font-medium text-green-700 dark:text-green-400">Bank Account Connected</p>
+                      <p className="text-sm text-green-600 dark:text-green-500">You can receive payouts directly to your bank account</p>
+                    </div>
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => connectOnboardMutation.mutate()}
+                    disabled={connectOnboardMutation.isPending}
+                  >
+                    {connectOnboardMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <ExternalLink className="h-4 w-4 mr-2" />
+                    )}
+                    Update Bank Details
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3 p-4 bg-muted rounded-md">
+                    <AlertCircle className="h-6 w-6 text-muted-foreground" />
+                    <div>
+                      <p className="font-medium">No Bank Account Connected</p>
+                      <p className="text-sm text-muted-foreground">Connect your bank to receive payouts</p>
+                    </div>
+                  </div>
+                  <Button 
+                    onClick={() => connectOnboardMutation.mutate()}
+                    disabled={connectOnboardMutation.isPending}
+                    data-testid="button-connect-bank"
+                  >
+                    {connectOnboardMutation.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Connecting...
+                      </>
+                    ) : (
+                      <>
+                        <Building className="h-4 w-4 mr-2" />
+                        Connect Bank Account
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <CreditCard className="h-5 w-5" />
+                Payment Method for Dues
+              </CardTitle>
+              <CardDescription>
+                Cards are entered when you pay dues - no need to save them in advance
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-3 p-4 bg-muted rounded-md">
+                <CreditCard className="h-6 w-6 text-muted-foreground" />
+                <div>
+                  <p className="font-medium">Pay-as-you-go</p>
+                  <p className="text-sm text-muted-foreground">
+                    When you pay league dues, you'll enter your card details securely via Stripe
+                  </p>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
