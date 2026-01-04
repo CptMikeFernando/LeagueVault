@@ -1,7 +1,7 @@
 import { db } from "./db";
 import { 
   users, leagues, leagueMembers, payments, payouts, weeklyScores, platformFees,
-  memberWallets, walletTransactions, withdrawalRequests, lpsPaymentRequests, paymentReminders, leagueMessages, leagueInvites,
+  memberWallets, walletTransactions, withdrawalRequests, lpsPaymentRequests, paymentReminders, leagueMessages, leagueInvites, weeklyAwardEvents,
   type User,
   type League, type InsertLeague,
   type LeagueMember, type InsertLeagueMember,
@@ -16,7 +16,8 @@ import {
   type PaymentReminder, type InsertPaymentReminder,
   type LeagueMessage,
   type LeagueInvite,
-  type LeagueWithMembers
+  type LeagueWithMembers,
+  type WeeklyAwardEvent, type InsertWeeklyAwardEvent
 } from "@shared/schema";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import { authStorage } from "./replit_integrations/auth/storage";
@@ -119,6 +120,11 @@ export interface IStorage {
 
   // Transfer commissioner
   transferCommissioner(leagueId: number, newCommissionerId: string): Promise<void>;
+
+  // Weekly award events
+  getWeeklyAwardEvent(leagueId: number, week: number): Promise<WeeklyAwardEvent | undefined>;
+  createWeeklyAwardEvent(event: InsertWeeklyAwardEvent): Promise<WeeklyAwardEvent>;
+  updateWeeklyAwardEvent(id: number, updates: { hpsWalletCredited?: boolean; lpsSmssSent?: boolean }): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -746,6 +752,22 @@ export class DatabaseStorage implements IStorage {
         .set({ role: 'commissioner' })
         .where(and(eq(leagueMembers.leagueId, leagueId), eq(leagueMembers.userId, newCommissionerId)));
     });
+  }
+
+  // Weekly award events
+  async getWeeklyAwardEvent(leagueId: number, week: number): Promise<WeeklyAwardEvent | undefined> {
+    const [event] = await db.select().from(weeklyAwardEvents)
+      .where(and(eq(weeklyAwardEvents.leagueId, leagueId), eq(weeklyAwardEvents.week, week)));
+    return event;
+  }
+
+  async createWeeklyAwardEvent(event: InsertWeeklyAwardEvent): Promise<WeeklyAwardEvent> {
+    const [created] = await db.insert(weeklyAwardEvents).values(event).returning();
+    return created;
+  }
+
+  async updateWeeklyAwardEvent(id: number, updates: { hpsWalletCredited?: boolean; lpsSmssSent?: boolean }): Promise<void> {
+    await db.update(weeklyAwardEvents).set(updates).where(eq(weeklyAwardEvents.id, id));
   }
 }
 

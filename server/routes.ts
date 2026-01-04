@@ -1,10 +1,12 @@
 import type { Express } from "express";
 import type { Server } from "http";
+import crypto from "crypto";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth";
 import { getStripePublishableKey, getUncachableStripeClient } from "./stripeClient";
+import { sendSMS } from "./twilio";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -928,17 +930,19 @@ export async function registerRoutes(
       const highestScorer = scores.length > 0 ? scores[0] : null;
       const lowestScorer = scores.length > 0 ? scores[scores.length - 1] : null;
 
-      // Get league settings to check if lowest scorer fee is enabled
+      // Get league settings to check if lowest scorer fee is enabled and get prize amounts
       const league = await storage.getLeague(leagueId);
       const weeklyLowScoreFeeEnabled = league?.settings?.weeklyLowScoreFeeEnabled || league?.settings?.lowestScorerFeeEnabled || false;
       const weeklyLowScoreFee = league?.settings?.weeklyLowScoreFee || league?.settings?.lowestScorerFee || 0;
+      const weeklyHighScorePrize = league?.settings?.weeklyHighScorePrize || league?.settings?.weeklyPayoutAmount || 0;
       
       res.json({ 
         scores, 
         highestScorer, 
         lowestScorer,
         weeklyLowScoreFeeEnabled,
-        weeklyLowScoreFee
+        weeklyLowScoreFee,
+        weeklyHighScorePrize
       });
     } catch (err) {
       console.error("Error fetching scores:", err);
@@ -2281,6 +2285,139 @@ export async function registerRoutes(
     } catch (err) {
       console.error("Error fetching sports scores:", err);
       res.status(500).json({ message: "Failed to fetch scores", games: [] });
+    }
+  });
+
+  // === WEEKLY AWARDS AUTOMATION ===
+  // This endpoint processes HPS wallet credits and LPS SMS notifications
+  // Should be triggered every Tuesday after fantasy week ends
+  // Requires admin authentication
+  app.post("/api/automation/process-weekly-awards", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { leagueId, week } = req.body;
+      
+      if (!leagueId || !week) {
+        return res.status(400).json({ message: "leagueId and week are required" });
+      }
+
+      const league = await storage.getLeague(leagueId);
+      if (!league) {
+        return res.status(404).json({ message: "League not found" });
+      }
+
+      // Check if this week has already been processed
+      const existingEvent = await storage.getWeeklyAwardEvent(leagueId, week);
+      if (existingEvent?.hpsWalletCredited && existingEvent?.lpsSmssSent) {
+        return res.json({ 
+          message: "Week already processed",
+          event: existingEvent
+        });
+      }
+
+      // Get highest and lowest scorers for this week using dedicated methods
+      const highestScorer = await storage.getHighestScorerForWeek(leagueId, week);
+      const lowestScorer = await storage.getLowestScorerForWeek(leagueId, week);
+      
+      if (!highestScorer || !lowestScorer) {
+        return res.status(400).json({ message: "No scores found for this week" });
+      }
+
+      const weeklyHighScorePrize = league.settings?.weeklyHighScorePrize || league.settings?.weeklyPayoutAmount || 0;
+      const weeklyLowScoreFee = league.settings?.weeklyLowScoreFee || league.settings?.lowestScorerFee || 0;
+      const weeklyLowScoreFeeEnabled = league.settings?.weeklyLowScoreFeeEnabled || league.settings?.lowestScorerFeeEnabled || false;
+
+      let hpsWalletCredited = existingEvent?.hpsWalletCredited || false;
+      let lpsSmssSent = existingEvent?.lpsSmssSent || false;
+      let eventId = existingEvent?.id;
+
+      // Create or update event record
+      if (!existingEvent) {
+        const event = await storage.createWeeklyAwardEvent({
+          leagueId,
+          week,
+          highScoreUserId: highestScorer?.userId,
+          lowScoreUserId: lowestScorer?.userId,
+          highScorePrize: String(weeklyHighScorePrize),
+          lowScoreFee: String(weeklyLowScoreFee),
+          hpsWalletCredited: false,
+          lpsSmssSent: false,
+        });
+        eventId = event.id;
+      }
+
+      // Process HPS wallet credit
+      if (!hpsWalletCredited && weeklyHighScorePrize > 0 && highestScorer) {
+        try {
+          const wallet = await storage.getOrCreateWallet(leagueId, highestScorer.userId);
+          await storage.creditWallet(
+            wallet.id,
+            String(weeklyHighScorePrize),
+            "payout",
+            null,
+            `Week ${week} High Score Bonus`
+          );
+          hpsWalletCredited = true;
+          console.log(`Credited $${weeklyHighScorePrize} to ${highestScorer.userId} wallet for Week ${week} HPS`);
+        } catch (err) {
+          console.error("Failed to credit HPS wallet:", err);
+        }
+      }
+
+      // Process LPS SMS notification
+      if (!lpsSmssSent && weeklyLowScoreFeeEnabled && weeklyLowScoreFee > 0 && lowestScorer) {
+        try {
+          // Find the member to get their phone number
+          const lowestMember = league.members.find(m => m.userId === lowestScorer.userId);
+          
+          if (lowestMember?.phoneNumber) {
+            // Create an LPS payment request
+            const paymentToken = crypto.randomUUID();
+            await storage.createLpsPaymentRequest({
+              leagueId,
+              userId: lowestScorer.userId,
+              week,
+              amount: String(weeklyLowScoreFee),
+              paymentToken,
+              phoneNumber: lowestMember.phoneNumber,
+            });
+
+            // Send SMS notification
+            const paymentUrl = `${process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : ''}/pay-lps/${paymentToken}`;
+            await sendSMS(
+              lowestMember.phoneNumber,
+              `You had the lowest score in ${league.name} for Week ${week}! You owe $${weeklyLowScoreFee}. Pay now: ${paymentUrl}`
+            );
+            
+            lpsSmssSent = true;
+            console.log(`Sent LPS SMS to ${lowestMember.phoneNumber} for Week ${week}`);
+          } else {
+            console.log(`No phone number for lowest scorer ${lowestScorer.userId} - will retry when contact info is added`);
+            // Don't mark as sent - allow retry when phone number is added
+          }
+        } catch (err) {
+          console.error("Failed to send LPS SMS:", err);
+        }
+      }
+
+      // Update event record
+      if (eventId) {
+        await storage.updateWeeklyAwardEvent(eventId, { hpsWalletCredited, lpsSmssSent });
+      }
+
+      res.json({
+        message: "Weekly awards processed",
+        week,
+        leagueId,
+        hpsWalletCredited,
+        lpsSmssSent,
+        highestScorer: highestScorer?.userId,
+        lowestScorer: lowestScorer?.userId,
+        weeklyHighScorePrize,
+        weeklyLowScoreFee
+      });
+    } catch (err) {
+      console.error("Error processing weekly awards:", err);
+      res.status(500).json({ message: "Failed to process weekly awards" });
     }
   });
 

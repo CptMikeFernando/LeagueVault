@@ -327,6 +327,28 @@ export const leagueMessagesRelations = relations(leagueMessages, ({ one }) => ({
   }),
 }));
 
+// === WEEKLY AWARD EVENTS (Track processed HPS/LPS awards) ===
+export const weeklyAwardEvents = pgTable("weekly_award_events", {
+  id: serial("id").primaryKey(),
+  leagueId: integer("league_id").notNull(),
+  week: integer("week").notNull(),
+  highScoreUserId: text("high_score_user_id"),
+  lowScoreUserId: text("low_score_user_id"),
+  highScorePrize: decimal("high_score_prize", { precision: 10, scale: 2 }),
+  lowScoreFee: decimal("low_score_fee", { precision: 10, scale: 2 }),
+  hpsWalletCredited: boolean("hps_wallet_credited").notNull().default(false),
+  lpsSmssSent: boolean("lps_sms_sent").notNull().default(false),
+  processedAt: timestamp("processed_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const weeklyAwardEventsRelations = relations(weeklyAwardEvents, ({ one }) => ({
+  league: one(leagues, {
+    fields: [weeklyAwardEvents.leagueId],
+    references: [leagues.id],
+  }),
+}));
+
 // === LEAGUE INVITES ===
 export const leagueInvites = pgTable("league_invites", {
   id: serial("id").primaryKey(),
@@ -363,6 +385,7 @@ export const insertWalletTransactionSchema = createInsertSchema(walletTransactio
 export const insertWithdrawalRequestSchema = createInsertSchema(withdrawalRequests).omit({ id: true, requestedAt: true, processedAt: true, status: true, stripeTransferId: true, failureReason: true });
 export const insertLeagueMessageSchema = createInsertSchema(leagueMessages).omit({ id: true, createdAt: true });
 export const insertLeagueInviteSchema = createInsertSchema(leagueInvites).omit({ id: true, createdAt: true, acceptedAt: true, status: true });
+export const insertWeeklyAwardEventSchema = createInsertSchema(weeklyAwardEvents).omit({ id: true, createdAt: true, processedAt: true });
 
 // === TYPES ===
 export type League = typeof leagues.$inferSelect;
@@ -391,5 +414,7 @@ export type LeagueMessage = typeof leagueMessages.$inferSelect;
 export type InsertLeagueMessage = z.infer<typeof insertLeagueMessageSchema>;
 export type LeagueInvite = typeof leagueInvites.$inferSelect;
 export type InsertLeagueInvite = z.infer<typeof insertLeagueInviteSchema>;
+export type WeeklyAwardEvent = typeof weeklyAwardEvents.$inferSelect;
+export type InsertWeeklyAwardEvent = z.infer<typeof insertWeeklyAwardEventSchema>;
 
 export type LeagueWithMembers = League & { members: (LeagueMember & { user: typeof users.$inferSelect })[] };
