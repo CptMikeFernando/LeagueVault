@@ -219,7 +219,7 @@ function ImportLeagueDialog() {
       <DialogTrigger asChild>
         <Button variant="secondary" data-testid="button-import-league">Import League</Button>
       </DialogTrigger>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Import from Platform</DialogTitle>
           <DialogDescription>
