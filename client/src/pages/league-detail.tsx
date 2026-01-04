@@ -2245,7 +2245,10 @@ function RequestAllPaymentsButton({ leagueId, members }: { leagueId: number; mem
           <div className="space-y-4 py-4">
             {membersWithoutContact.map((member) => (
               <div key={member.id} className="border rounded-md p-3 space-y-2">
-                <p className="font-medium text-sm">{member.teamName || member.ownerName || 'Unknown Member'}</p>
+                <div>
+                  <p className="font-medium text-sm">{member.ownerName || 'Unknown Member'}</p>
+                  {member.teamName && <p className="text-xs text-muted-foreground">{member.teamName}</p>}
+                </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <Label className="text-xs text-muted-foreground">Email</Label>
