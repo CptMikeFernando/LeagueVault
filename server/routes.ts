@@ -1111,6 +1111,7 @@ export async function registerRoutes(
       const paymentIntent = await stripe.paymentIntents.create({
         amount: Math.round(Number(amount) * 100), // Convert to cents
         currency: 'usd',
+        payment_method_types: ['card', 'us_bank_account'],
         metadata: {
           leagueId: String(leagueId),
           userId: req.user.claims.sub
