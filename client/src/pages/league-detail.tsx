@@ -54,7 +54,9 @@ import {
   ExternalLink,
   Loader2,
   Clock,
-  DollarSign
+  DollarSign,
+  Crown,
+  ThumbsDown
 } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useState } from "react";
@@ -224,6 +226,11 @@ export default function LeagueDetail() {
                 </div>
               </CardContent>
             </Card>
+          )}
+
+          {/* Weekly Scores - Show when member has paid */}
+          {currentMember && currentMember.paidStatus === 'paid' && (
+            <WeeklyScoresWidget leagueId={league.id} members={league.members} />
           )}
 
           {/* Row: Message Board + League Info */}
@@ -2945,6 +2952,98 @@ function MessageBoard({ leagueId }: { leagueId: number }) {
             <Send className="w-4 h-4" />
           </Button>
         </form>
+      </CardContent>
+    </Card>
+  );
+}
+
+function WeeklyScoresWidget({ leagueId, members }: { leagueId: number; members: any[] }) {
+  const [selectedWeek, setSelectedWeek] = useState(1);
+  
+  const { data, isLoading } = useQuery<{ 
+    scores: any[]; 
+    highestScorer: any; 
+    lowestScorer: any;
+    weeklyLowScoreFeeEnabled: boolean;
+  }>({
+    queryKey: ['/api/leagues', leagueId, 'scores', selectedWeek],
+    queryFn: async () => {
+      const response = await fetch(`/api/leagues/${leagueId}/scores/${selectedWeek}`);
+      if (!response.ok) throw new Error('Failed to fetch scores');
+      return response.json();
+    },
+  });
+
+  const getMemberName = (userId: string) => {
+    const member = members.find(m => m.userId === userId);
+    return member?.teamName || member?.ownerName || 'Unknown';
+  };
+
+  const weeks = Array.from({ length: 17 }, (_, i) => i + 1);
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Trophy className="w-4 h-4" />
+            Weekly Scores
+          </CardTitle>
+          <Select value={String(selectedWeek)} onValueChange={(v) => setSelectedWeek(Number(v))}>
+            <SelectTrigger className="w-[120px]" data-testid="select-week">
+              <SelectValue placeholder="Week" />
+            </SelectTrigger>
+            <SelectContent>
+              {weeks.map(w => (
+                <SelectItem key={w} value={String(w)}>Week {w}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="space-y-2">
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} className="h-10 bg-muted animate-pulse rounded" />
+            ))}
+          </div>
+        ) : data?.scores && data.scores.length > 0 ? (
+          <div className="space-y-2">
+            {data.scores.map((score, index) => {
+              const isHighest = data.highestScorer?.userId === score.userId;
+              const isLowest = data.lowestScorer?.userId === score.userId && data.weeklyLowScoreFeeEnabled;
+              
+              return (
+                <div 
+                  key={score.id || index}
+                  className={`flex items-center justify-between p-2 rounded-md ${
+                    isHighest ? 'bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800' :
+                    isLowest ? 'bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800' :
+                    'bg-muted/30'
+                  }`}
+                  data-testid={`score-row-${index}`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground text-sm w-6">{index + 1}.</span>
+                    {isHighest && <Crown className="w-4 h-4 text-yellow-500" />}
+                    {isLowest && <ThumbsDown className="w-4 h-4 text-red-500" />}
+                    <span className="font-medium text-sm">{getMemberName(score.userId)}</span>
+                  </div>
+                  <span className={`font-mono text-sm font-medium ${
+                    isHighest ? 'text-green-600' : isLowest ? 'text-red-600' : ''
+                  }`}>
+                    {Number(score.score).toFixed(2)} pts
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="text-muted-foreground text-center py-4 text-sm">
+            No scores for Week {selectedWeek} yet
+          </p>
+        )}
       </CardContent>
     </Card>
   );
