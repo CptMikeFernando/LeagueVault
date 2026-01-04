@@ -303,7 +303,7 @@ export default function LeagueDetail() {
                       <TableHead>Team</TableHead>
                       <TableHead>Role</TableHead>
                       <TableHead>Status</TableHead>
-                      {isCommissioner && <TableHead>Payment</TableHead>}
+                      {isCommissioner && <TableHead>Payment Request</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -2477,8 +2477,11 @@ function SendReminderButton({ leagueId, member }: { leagueId: number; member: an
     return <span className="text-sm text-green-600 font-medium">Paid</span>;
   }
 
-  // Show "Sent" if payment request was already sent
-  if (member.paymentRequestSent) {
+  // Show "Sent" if payment request was sent within last 24 hours
+  const isRecentRequest = member.paymentRequestSent && member.paymentRequestSentAt && 
+    (new Date().getTime() - new Date(member.paymentRequestSentAt).getTime()) < 24 * 60 * 60 * 1000;
+  
+  if (isRecentRequest) {
     return (
       <Badge className="bg-green-600 text-white" data-testid={`badge-sent-${member.id}`}>
         Sent
@@ -2494,7 +2497,7 @@ function SendReminderButton({ leagueId, member }: { leagueId: number; member: an
           variant="outline"
           data-testid={`button-remind-${member.id}`}
         >
-          Remind
+          Request
         </Button>
       </DialogTrigger>
       <DialogContent>
