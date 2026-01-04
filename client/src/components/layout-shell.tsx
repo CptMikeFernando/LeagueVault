@@ -17,14 +17,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useState } from "react";
-import privacyImage from "@assets/stock_images/woman_covering_herse_519e5ab0.jpg";
 
 export function Shell({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
   const [location] = useLocation();
-  const [privacyOpen, setPrivacyOpen] = useState(false);
 
   if (!user) return <>{children}</>;
 
