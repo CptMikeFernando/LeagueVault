@@ -49,7 +49,11 @@ import {
   UserPlus,
   Bell,
   X,
-  Pencil
+  Pencil,
+  Check,
+  ExternalLink,
+  Loader2,
+  Clock
 } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useState } from "react";
@@ -734,6 +738,8 @@ function WeeklyScoreForm({ league }: { league: any }) {
 }
 
 function MyWalletTab({ leagueId, userId }: { leagueId: number; userId: string }) {
+  const { toast } = useToast();
+  
   const { data: walletData, isLoading } = useQuery({
     queryKey: ['/api/wallets', leagueId, userId],
     queryFn: async () => {
@@ -743,6 +749,33 @@ function MyWalletTab({ leagueId, userId }: { leagueId: number; userId: string })
         throw new Error('Failed to fetch wallet');
       }
       return res.json();
+    }
+  });
+
+  const { data: withdrawals = [] } = useQuery<any[]>({
+    queryKey: ['/api/withdrawals/me'],
+  });
+
+  const { data: connectStatus, isLoading: connectLoading, refetch: refetchConnectStatus } = useQuery<{
+    hasConnectAccount: boolean;
+    isOnboarded: boolean;
+    accountId: string | null;
+  }>({
+    queryKey: ['/api/stripe/connect/status'],
+  });
+
+  const connectOnboardMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/stripe/connect/onboard", {});
+      return res.json();
+    },
+    onSuccess: (data) => {
+      if (data.url) {
+        window.location.href = data.url;
+      }
+    },
+    onError: (err: any) => {
+      toast({ title: "Failed to start onboarding", description: err.message, variant: "destructive" });
     }
   });
 
@@ -794,37 +827,193 @@ function MyWalletTab({ leagueId, userId }: { leagueId: number; userId: string })
         </Card>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Transaction History</CardTitle>
-          <CardDescription>Your wallet activity in this league</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {!wallet || transactions.length === 0 ? (
-            <div className="text-center py-8">
-              <Wallet className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground">No transactions yet</p>
-              <p className="text-sm text-muted-foreground">Earnings from payouts will appear here</p>
-            </div>
-          ) : (
-            <ScrollArea className="h-[300px]">
-              <div className="space-y-4">
-                {transactions.map((tx: any) => (
-                  <div key={tx.id} className="flex justify-between items-center border-b pb-2 last:border-0">
-                    <div>
-                      <p className="font-medium text-sm">{tx.description}</p>
-                      <p className="text-xs text-muted-foreground">{format(new Date(tx.createdAt), 'MMM d, yyyy')}</p>
-                    </div>
-                    <span className={`font-mono font-medium ${tx.type === 'credit' ? 'text-green-600' : 'text-red-600'}`}>
-                      {tx.type === 'credit' ? '+' : '-'}${Number(tx.amount).toFixed(2)}
-                    </span>
+      <Tabs defaultValue="wallet" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="wallet">League Wallet</TabsTrigger>
+          <TabsTrigger value="withdrawals">Withdrawal History</TabsTrigger>
+          <TabsTrigger value="settings">Payment Settings</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="wallet">
+          <Card>
+            <CardHeader>
+              <CardTitle>Transaction History</CardTitle>
+              <CardDescription>Your wallet activity in this league</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {!wallet || transactions.length === 0 ? (
+                <div className="text-center py-8">
+                  <Wallet className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <p className="text-muted-foreground">No transactions yet</p>
+                  <p className="text-sm text-muted-foreground">Earnings from payouts will appear here</p>
+                </div>
+              ) : (
+                <ScrollArea className="h-[300px]">
+                  <div className="space-y-4">
+                    {transactions.map((tx: any) => (
+                      <div key={tx.id} className="flex justify-between items-center border-b pb-2 last:border-0">
+                        <div>
+                          <p className="font-medium text-sm">{tx.description}</p>
+                          <p className="text-xs text-muted-foreground">{format(new Date(tx.createdAt), 'MMM d, yyyy')}</p>
+                        </div>
+                        <span className={`font-mono font-medium ${tx.type === 'credit' ? 'text-green-600' : 'text-red-600'}`}>
+                          {tx.type === 'credit' ? '+' : '-'}${Number(tx.amount).toFixed(2)}
+                        </span>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                </ScrollArea>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="withdrawals">
+          <Card>
+            <CardHeader>
+              <CardTitle>Withdrawal History</CardTitle>
+              <CardDescription>Your past withdrawal requests and their status</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {withdrawals.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <Building className="h-12 w-12 text-muted-foreground mb-4" />
+                  <p className="text-muted-foreground text-center">No withdrawals yet</p>
+                </div>
+              ) : (
+                <ScrollArea className="h-[300px]">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Amount</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead>Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {withdrawals.map((withdrawal: any) => (
+                        <TableRow key={withdrawal.id}>
+                          <TableCell>{format(new Date(withdrawal.requestedAt), 'MMM d, yyyy')}</TableCell>
+                          <TableCell className="font-medium">${Number(withdrawal.amount).toFixed(2)}</TableCell>
+                          <TableCell>
+                            <Badge variant={withdrawal.payoutType === 'instant' ? 'default' : 'secondary'}>
+                              {withdrawal.payoutType === 'instant' ? 'Instant' : 'Standard'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge 
+                              variant={
+                                withdrawal.status === 'completed' ? 'default' :
+                                withdrawal.status === 'processing' ? 'secondary' :
+                                withdrawal.status === 'failed' ? 'destructive' : 'outline'
+                              }
+                            >
+                              {withdrawal.status}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </ScrollArea>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="settings" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Building className="h-5 w-5" />
+                Bank Account for Payouts
+              </CardTitle>
+              <CardDescription>
+                Connect your bank account to receive winnings and payouts directly
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {connectLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : connectStatus?.isOnboarded ? (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3 p-4 bg-green-50 dark:bg-green-900/20 rounded-md border border-green-200 dark:border-green-800">
+                    <Check className="h-6 w-6 text-green-600" />
+                    <div>
+                      <p className="font-medium text-green-700 dark:text-green-400">Bank Account Connected</p>
+                      <p className="text-sm text-green-600 dark:text-green-500">You can receive payouts directly to your bank account</p>
+                    </div>
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => connectOnboardMutation.mutate()}
+                    disabled={connectOnboardMutation.isPending}
+                  >
+                    {connectOnboardMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <ExternalLink className="h-4 w-4 mr-2" />
+                    )}
+                    Update Bank Details
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3 p-4 bg-muted rounded-md">
+                    <AlertCircle className="h-6 w-6 text-muted-foreground" />
+                    <div>
+                      <p className="font-medium">No Bank Account Connected</p>
+                      <p className="text-sm text-muted-foreground">Connect your bank to receive payouts</p>
+                    </div>
+                  </div>
+                  <Button 
+                    onClick={() => connectOnboardMutation.mutate()}
+                    disabled={connectOnboardMutation.isPending}
+                  >
+                    {connectOnboardMutation.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Connecting...
+                      </>
+                    ) : (
+                      <>
+                        <Building className="h-4 w-4 mr-2" />
+                        Connect Bank Account
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <CreditCard className="h-5 w-5" />
+                Payment Method for Dues
+              </CardTitle>
+              <CardDescription>
+                Cards are entered when you pay dues - no need to save them in advance
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-3 p-4 bg-muted rounded-md">
+                <CreditCard className="h-6 w-6 text-muted-foreground" />
+                <div>
+                  <p className="font-medium">Pay-as-you-go</p>
+                  <p className="text-sm text-muted-foreground">
+                    When you pay league dues, you'll enter your card details securely via Stripe
+                  </p>
+                </div>
               </div>
-            </ScrollArea>
-          )}
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
