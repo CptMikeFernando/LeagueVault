@@ -3027,7 +3027,7 @@ function WeeklyScoresWidget({ leagueId, members }: { leagueId: number; members: 
                   <div className="flex items-center gap-2">
                     <span className="text-muted-foreground text-sm w-6">{index + 1}.</span>
                     {isHighest && <Crown className="w-4 h-4 text-yellow-500" />}
-                    {isLowest && <span className="text-base" role="img" aria-label="poop">💩</span>}
+                    {isLowest && <span className="text-sm">&#x1F4A9;</span>}
                     <span className="font-medium text-sm">{getMemberName(score.userId)}</span>
                   </div>
                   <span className={`font-mono text-sm font-medium ${
