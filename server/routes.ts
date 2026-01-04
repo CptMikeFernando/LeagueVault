@@ -104,9 +104,52 @@ export async function registerRoutes(
   });
 
   // === INTEGRATIONS (ESPN/Yahoo) ===
+  
+  // Preview ESPN league data without creating (for team selection)
+  app.post("/api/leagues/preview-espn", isAuthenticated, async (req: any, res) => {
+    try {
+      const { leagueUrl, espnS2, swid } = req.body;
+      
+      const urlMatch = leagueUrl.match(/leagueId=(\d+)/);
+      if (!urlMatch) {
+        return res.status(400).json({ message: "Could not parse ESPN league ID from URL." });
+      }
+      const espnLeagueId = urlMatch[1];
+      
+      const now = new Date();
+      const currentYear = now.getMonth() < 7 
+        ? (now.getFullYear() - 1).toString() 
+        : now.getFullYear().toString();
+      
+      const { fetchEspnLeagueInfo } = await import('./espn-api');
+      const cookies = espnS2 && swid ? { espnS2, swid } : undefined;
+      const result = await fetchEspnLeagueInfo(espnLeagueId, currentYear, cookies);
+      
+      if (!result.success || !result.data) {
+        return res.status(400).json({ 
+          message: result.error || "Failed to fetch ESPN league data." 
+        });
+      }
+      
+      return res.json({
+        success: true,
+        leagueName: result.data.name,
+        seasonId: result.data.seasonId,
+        teams: result.data.teams.map(t => ({
+          id: t.id,
+          name: t.name,
+          ownerName: t.ownerName
+        }))
+      });
+    } catch (err) {
+      console.error("Error previewing ESPN league:", err);
+      res.status(500).json({ message: "Failed to preview ESPN league" });
+    }
+  });
+  
   app.post(api.leagues.syncPlatform.path, isAuthenticated, async (req: any, res) => {
     try {
-      const { platform, leagueUrl, espnS2, swid } = req.body;
+      const { platform, leagueUrl, espnS2, swid, selectedTeamId } = req.body;
       const userId = req.user.claims.sub;
       
       if (platform === 'espn') {
@@ -122,7 +165,7 @@ export async function registerRoutes(
           ? (now.getFullYear() - 1).toString() 
           : now.getFullYear().toString();
         
-        console.log(`ESPN Import: League ID ${espnLeagueId}, Season ${currentYear}, Cookies provided: ${!!(espnS2 && swid)}`);
+        console.log(`ESPN Import: League ID ${espnLeagueId}, Season ${currentYear}, Cookies provided: ${!!(espnS2 && swid)}, Selected Team: ${selectedTeamId}`);
         
         // Fetch real league info from ESPN API
         const { fetchEspnLeagueInfo } = await import('./espn-api');
@@ -165,14 +208,15 @@ export async function registerRoutes(
         });
 
         // Create members for each ESPN team
-        // The first team (or the one matching commissioner) uses the real user ID
-        // Other teams use placeholder IDs to be mapped later
+        // The user's selected team uses their real user ID, others are placeholders
         let commissionerAssigned = false;
         
         for (const team of espnData.teams) {
           try {
-            // Assign the first team to the commissioner (they can change team mapping later)
-            const isCommissionerTeam = !commissionerAssigned;
+            // Check if this is the user's selected team
+            const isCommissionerTeam = selectedTeamId ? 
+              team.id.toString() === selectedTeamId.toString() : 
+              false;
             
             await storage.addLeagueMember({
               leagueId: league.id,
@@ -193,7 +237,7 @@ export async function registerRoutes(
           }
         }
         
-        // If no teams were found, add commissioner as a basic member
+        // If no team was selected or found, add commissioner as a basic member
         if (!commissionerAssigned) {
           await storage.addLeagueMember({
             leagueId: league.id,
