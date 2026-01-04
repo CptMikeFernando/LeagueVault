@@ -3029,13 +3029,6 @@ function WeeklyScoresWidget({ leagueId, members }: { leagueId: number; members: 
                     {isHighest && <Crown className="w-4 h-4 text-yellow-500" />}
                     {isLowest && <Icon path={mdiEmoticonPoop} size={0.7} color="#8B4513" />}
                     <span className="font-medium text-sm">{getMemberName(score.userId)}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className={`font-mono text-sm font-medium ${
-                      isHighest ? 'text-green-600' : isLowest ? 'text-red-600' : ''
-                    }`}>
-                      {Number(score.score).toFixed(2)} pts
-                    </span>
                     {isHighest && data.weeklyHighScorePrize > 0 && (
                       <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300 text-xs">
                         +${data.weeklyHighScorePrize}
@@ -3047,6 +3040,11 @@ function WeeklyScoresWidget({ leagueId, members }: { leagueId: number; members: 
                       </Badge>
                     )}
                   </div>
+                  <span className={`font-mono text-sm font-medium ${
+                    isHighest ? 'text-green-600' : isLowest ? 'text-red-600' : ''
+                  }`}>
+                    {Number(score.score).toFixed(2)} pts
+                  </span>
                 </div>
               );
             })}
