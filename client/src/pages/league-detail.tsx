@@ -3010,7 +3010,7 @@ function WeeklyScoresWidget({ leagueId, members }: { leagueId: number; members: 
           <div className="space-y-2">
             {data.scores.map((score, index) => {
               const isHighest = data.highestScorer?.userId === score.userId;
-              const isLowest = data.lowestScorer?.userId === score.userId && data.weeklyLowScoreFeeEnabled;
+              const isLowest = data.lowestScorer?.userId === score.userId;
               
               return (
                 <div 
