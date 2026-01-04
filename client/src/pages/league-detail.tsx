@@ -196,7 +196,6 @@ export default function LeagueDetail() {
           <TabsTrigger value="my-wallet" className="data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-0 py-3 bg-transparent font-medium">My Wallet</TabsTrigger>
           {isCommissioner && (
             <>
-              <TabsTrigger value="finances" className="data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-0 py-3 bg-transparent font-medium">Finances</TabsTrigger>
               <TabsTrigger value="treasury" className="data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-0 py-3 bg-transparent font-medium" data-testid="tab-treasury">Treasury</TabsTrigger>
               <TabsTrigger value="tools" className="data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-0 py-3 bg-transparent font-medium">Commish Tools</TabsTrigger>
               <TabsTrigger value="settings" className="data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-0 py-3 bg-transparent font-medium" data-testid="tab-settings">Settings</TabsTrigger>
@@ -357,14 +356,8 @@ export default function LeagueDetail() {
         </TabsContent>
 
         {isCommissioner && (
-          <TabsContent value="finances">
-            <FinancesTab league={league} />
-          </TabsContent>
-        )}
-
-        {isCommissioner && (
           <TabsContent value="treasury">
-            <TreasuryTab leagueId={leagueId} />
+            <TreasuryTab leagueId={leagueId} league={league} />
           </TabsContent>
         )}
 
@@ -1003,77 +996,6 @@ function MyWalletTab({ leagueId, userId }: { leagueId: number; userId: string })
   );
 }
 
-function FinancesTab({ league }: { league: any }) {
-  const { data: history, isLoading } = usePayments(league.id);
-
-  if (isLoading) return <Skeleton className="h-48 w-full" />;
-
-  const payments = history?.payments || [];
-  const payouts = history?.payouts || [];
-
-  // Helper to get team name from userId
-  const getTeamName = (userId: string) => {
-    const member = league.members?.find((m: any) => m.userId === userId);
-    return member?.teamName || 'Unknown Team';
-  };
-
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg text-green-700">Money In</CardTitle>
-          <CardDescription>Dues collected from members</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ScrollArea className="h-[300px]">
-             {payments.length === 0 ? (
-               <p className="text-sm text-muted-foreground text-center py-8">No payments received yet.</p>
-             ) : (
-               <div className="space-y-4">
-                 {payments.map((p: any) => (
-                   <div key={p.id} className="flex justify-between items-center border-b pb-2 last:border-0" data-testid={`payment-row-${p.id}`}>
-                      <div>
-                        <p className="font-medium text-sm">{getTeamName(p.userId)}</p>
-                        <p className="text-xs text-muted-foreground">{format(new Date(p.createdAt), 'MMM d, yyyy')}</p>
-                      </div>
-                      <span className="font-mono font-medium text-green-600">+${Number(p.amount).toFixed(2)}</span>
-                   </div>
-                 ))}
-               </div>
-             )}
-          </ScrollArea>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg text-red-700">Money Out</CardTitle>
-          <CardDescription>Prizes and payouts distributed</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ScrollArea className="h-[300px]">
-             {payouts.length === 0 ? (
-               <p className="text-sm text-muted-foreground text-center py-8">No payouts issued yet.</p>
-             ) : (
-               <div className="space-y-4">
-                 {payouts.map((p: any) => (
-                   <div key={p.id} className="flex justify-between items-center border-b pb-2 last:border-0" data-testid={`payout-row-${p.id}`}>
-                      <div>
-                        <p className="font-medium text-sm">{getTeamName(p.userId)}</p>
-                        <p className="text-xs text-muted-foreground capitalize">{p.reason.replace(/_/g, " ")} - {format(new Date(p.createdAt), 'MMM d, yyyy')}</p>
-                      </div>
-                      <span className="font-mono font-medium text-red-600">-${Number(p.amount).toFixed(2)}</span>
-                   </div>
-                 ))}
-               </div>
-             )}
-          </ScrollArea>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
 interface TreasuryData {
   totalInflow: string;
   totalOutflow: string;
@@ -1088,8 +1010,8 @@ interface TreasuryData {
   leagueName: string;
 }
 
-function TreasuryTab({ leagueId }: { leagueId: number }) {
-  const { data: treasury, isLoading } = useQuery<TreasuryData>({
+function TreasuryTab({ leagueId, league }: { leagueId: number; league: any }) {
+  const { data: treasury, isLoading: treasuryLoading } = useQuery<TreasuryData>({
     queryKey: ['/api/leagues', leagueId, 'treasury'],
     queryFn: async () => {
       const res = await fetch(`/api/leagues/${leagueId}/treasury`, { credentials: 'include' });
@@ -1098,7 +1020,17 @@ function TreasuryTab({ leagueId }: { leagueId: number }) {
     }
   });
 
-  if (isLoading) return <Skeleton className="h-48 w-full" />;
+  const { data: history, isLoading: paymentsLoading } = usePayments(leagueId);
+
+  if (treasuryLoading || paymentsLoading) return <Skeleton className="h-48 w-full" />;
+
+  const payments = history?.payments || [];
+  const payouts = history?.payouts || [];
+
+  const getTeamName = (userId: string) => {
+    const member = league.members?.find((m: any) => m.userId === userId);
+    return member?.teamName || 'Unknown Team';
+  };
 
   if (!treasury) {
     return (
@@ -1207,6 +1139,60 @@ function TreasuryTab({ leagueId }: { leagueId: number }) {
           )}
         </CardContent>
       </Card>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg text-green-700">Money In</CardTitle>
+            <CardDescription>Dues collected from members</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ScrollArea className="h-[300px]">
+               {payments.length === 0 ? (
+                 <p className="text-sm text-muted-foreground text-center py-8">No payments received yet.</p>
+               ) : (
+                 <div className="space-y-4">
+                   {payments.map((p: any) => (
+                     <div key={p.id} className="flex justify-between items-center border-b pb-2 last:border-0" data-testid={`payment-row-${p.id}`}>
+                        <div>
+                          <p className="font-medium text-sm">{getTeamName(p.userId)}</p>
+                          <p className="text-xs text-muted-foreground">{format(new Date(p.createdAt), 'MMM d, yyyy')}</p>
+                        </div>
+                        <span className="font-mono font-medium text-green-600">+${Number(p.amount).toFixed(2)}</span>
+                     </div>
+                   ))}
+                 </div>
+               )}
+            </ScrollArea>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg text-red-700">Money Out</CardTitle>
+            <CardDescription>Prizes and payouts distributed</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ScrollArea className="h-[300px]">
+               {payouts.length === 0 ? (
+                 <p className="text-sm text-muted-foreground text-center py-8">No payouts issued yet.</p>
+               ) : (
+                 <div className="space-y-4">
+                   {payouts.map((p: any) => (
+                     <div key={p.id} className="flex justify-between items-center border-b pb-2 last:border-0" data-testid={`payout-row-${p.id}`}>
+                        <div>
+                          <p className="font-medium text-sm">{getTeamName(p.userId)}</p>
+                          <p className="text-xs text-muted-foreground capitalize">{p.reason.replace(/_/g, " ")} - {format(new Date(p.createdAt), 'MMM d, yyyy')}</p>
+                        </div>
+                        <span className="font-mono font-medium text-red-600">-${Number(p.amount).toFixed(2)}</span>
+                     </div>
+                   ))}
+                 </div>
+               )}
+            </ScrollArea>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
