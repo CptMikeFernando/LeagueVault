@@ -227,7 +227,8 @@ export async function registerRoutes(
               teamName: team.name,
               ownerName: team.ownerName || null,
               externalTeamId: team.id.toString(),
-              paidStatus: 'unpaid'
+              paidStatus: 'unpaid',
+              email: isCommissionerTeam ? req.user.claims.email : null
             });
             
             if (isCommissionerTeam) {
@@ -246,7 +247,8 @@ export async function registerRoutes(
             userId,
             role: 'commissioner',
             teamName: 'Commissioner',
-            paidStatus: 'unpaid'
+            paidStatus: 'unpaid',
+            email: req.user.claims.email || null
           });
         }
 
