@@ -2084,6 +2084,8 @@ export async function registerRoutes(
             type: 'individual',
             email: member.email
           });
+          // Mark payment request as sent
+          await storage.updateMemberPaymentRequestSent(memberId, true);
           return res.json({ success: true, messageId: result.messageId, method: 'email' });
         } else {
           return res.status(500).json({ message: result.error || "Failed to send email" });
@@ -2110,6 +2112,8 @@ export async function registerRoutes(
             type: 'individual',
             phoneNumber: member.phoneNumber
           });
+          // Mark payment request as sent
+          await storage.updateMemberPaymentRequestSent(memberId, true);
           res.json({ success: true, messageId: smsResult.messageId, method: 'sms' });
         } else {
           res.status(500).json({ message: smsResult.error || "Failed to send SMS" });
