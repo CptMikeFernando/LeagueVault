@@ -2823,6 +2823,7 @@ function MessageBoard({ leagueId }: { leagueId: number }) {
   const { toast } = useToast();
   const { user } = useAuth();
   const [newMessage, setNewMessage] = useState("");
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   const { data: messages, isLoading } = useQuery({
     queryKey: ['/api/leagues', leagueId, 'messages'],
@@ -2900,6 +2901,11 @@ function MessageBoard({ leagueId }: { leagueId: number }) {
     }
   };
 
+  useEffect(() => {
+    if (scrollRef.current && messages?.length) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages]);
 
   return (
     <Card className="h-[450px] flex flex-col">
@@ -2911,7 +2917,7 @@ function MessageBoard({ leagueId }: { leagueId: number }) {
         <CardDescription>Chat with your league members</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4 flex-1 flex flex-col overflow-hidden">
-        <ScrollArea className="flex-1">
+        <div ref={scrollRef} className="flex-1 overflow-y-auto">
           {isLoading ? (
             <div className="space-y-3">
               {[1, 2, 3].map(i => (
@@ -2929,7 +2935,7 @@ function MessageBoard({ leagueId }: { leagueId: number }) {
               No messages yet. Be the first to post!
             </p>
           ) : (
-            <div className="space-y-4 flex flex-col-reverse">
+            <div className="space-y-4 flex flex-col">
               {messages?.map((msg: any) => (
                 <div key={msg.id} className="flex gap-3 group" data-testid={`message-${msg.id}`}>
                   <Avatar className="h-8 w-8">
@@ -2968,7 +2974,7 @@ function MessageBoard({ leagueId }: { leagueId: number }) {
               ))}
             </div>
           )}
-        </ScrollArea>
+        </div>
 
         <Separator />
 
