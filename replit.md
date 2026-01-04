@@ -102,3 +102,18 @@ The `shared/` directory contains code used by both frontend and backend:
   - LPS payment requests (automatically on score sync)
   - Payment reminders (manually triggered by commissioners)
 - **Automated Scheduling**: Pre-season reminder automation requires a cron/scheduler service. Manual triggers are available in Commish Tools.
+
+## Future Roadmap
+
+### Interest-Bearing Fund Holding (Requires Legal Consultation)
+- **Concept**: Hold pooled league dues in an interest-bearing account to generate revenue
+- **Requirements**:
+  - Money Transmitter License (state-by-state, $50K-$500K+ in bonds/fees)
+  - Fintech attorney consultation for compliance
+  - Clear Terms of Service disclosure
+  - Possible escrow/trust account requirements
+- **Options to Explore**:
+  - Stripe Treasury (Financial Accounts for platforms)
+  - Partnership with licensed bank/fintech
+  - Becoming a licensed money transmitter
+- **Status**: Research phase - requires legal guidance before implementation
