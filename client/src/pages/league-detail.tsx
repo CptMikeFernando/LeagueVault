@@ -232,7 +232,7 @@ export default function LeagueDetail() {
 
           {/* Weekly Scores - Show when member has paid */}
           {currentMember && currentMember.paidStatus === 'paid' && (
-            <WeeklyScoresWidget leagueId={league.id} members={league.members} />
+            <WeeklyScoresWidget leagueId={league.id} members={league.members} numberOfWeeks={league.settings?.numberOfWeeks || 17} />
           )}
 
           {/* Row: Message Board + League Info */}
@@ -2995,7 +2995,7 @@ function MessageBoard({ leagueId }: { leagueId: number }) {
   );
 }
 
-function WeeklyScoresWidget({ leagueId, members }: { leagueId: number; members: any[] }) {
+function WeeklyScoresWidget({ leagueId, members, numberOfWeeks = 17 }: { leagueId: number; members: any[]; numberOfWeeks?: number }) {
   const [selectedWeek, setSelectedWeek] = useState(1);
   
   const { data, isLoading } = useQuery<{ 
@@ -3019,7 +3019,7 @@ function WeeklyScoresWidget({ leagueId, members }: { leagueId: number; members: 
     return member?.teamName || member?.ownerName || 'Unknown';
   };
 
-  const weeks = Array.from({ length: 17 }, (_, i) => i + 1);
+  const weeks = Array.from({ length: numberOfWeeks }, (_, i) => i + 1);
 
   return (
     <Card>
