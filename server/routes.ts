@@ -164,32 +164,44 @@ export async function registerRoutes(
           }
         });
 
-        // Add the commissioner as a member (they can map to their ESPN team later)
-        await storage.addLeagueMember({
-          leagueId: league.id,
-          userId,
-          role: 'commissioner',
-          teamName: 'Commissioner',
-          paidStatus: 'unpaid'
-        });
+        // Create members for each ESPN team
+        // The first team (or the one matching commissioner) uses the real user ID
+        // Other teams use placeholder IDs to be mapped later
+        let commissionerAssigned = false;
         
-        // Create placeholder members for each ESPN team (to be mapped to real users later)
-        // These use placeholder user IDs that commissioners can update through team mapping
         for (const team of espnData.teams) {
           try {
+            // Assign the first team to the commissioner (they can change team mapping later)
+            const isCommissionerTeam = !commissionerAssigned;
+            
             await storage.addLeagueMember({
               leagueId: league.id,
-              userId: `espn-team-${league.id}-${team.id}`,
-              role: 'member',
+              userId: isCommissionerTeam ? userId : `espn-team-${league.id}-${team.id}`,
+              role: isCommissionerTeam ? 'commissioner' : 'member',
               teamName: team.name,
               ownerName: team.ownerName || null,
               externalTeamId: team.id.toString(),
               paidStatus: 'unpaid'
             });
+            
+            if (isCommissionerTeam) {
+              commissionerAssigned = true;
+            }
           } catch (err) {
             // Skip if there's a constraint violation (shouldn't happen with unique IDs)
             console.warn(`Could not add placeholder for team ${team.id}:`, err);
           }
+        }
+        
+        // If no teams were found, add commissioner as a basic member
+        if (!commissionerAssigned) {
+          await storage.addLeagueMember({
+            leagueId: league.id,
+            userId,
+            role: 'commissioner',
+            teamName: 'Commissioner',
+            paidStatus: 'unpaid'
+          });
         }
 
         return res.json({
