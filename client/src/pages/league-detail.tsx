@@ -294,49 +294,51 @@ export default function LeagueDetail() {
               {isCommissioner && <InviteMemberDialog leagueId={league.id} />}
             </CardHeader>
             <CardContent className="space-y-6">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Member</TableHead>
-                    <TableHead>Team Name</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead>Status</TableHead>
-                    {isCommissioner && <TableHead>Invite</TableHead>}
-                    {isCommissioner && <TableHead>Payment</TableHead>}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {league.members.map((member: any) => (
-                    <TableRow key={member.id}>
-                      <TableCell className="font-medium">
-                        <div className="flex items-center gap-2">
-                          {isCommissioner && <EditMemberDialog leagueId={league.id} member={member} />}
-                          {member.ownerName || (member.user ? `${member.user.firstName || ''} ${member.user.lastName || ''}`.trim() : `User ${member.userId.slice(0,4)}...`)}
-                        </div>
-                      </TableCell>
-                      <TableCell>{member.teamName}</TableCell>
-                      <TableCell className="capitalize">{member.role}</TableCell>
-                      <TableCell>
-                        <Badge variant={member.paidStatus === 'paid' ? 'default' : 'destructive'} className="capitalize">
-                          {member.paidStatus}
-                        </Badge>
-                      </TableCell>
-                      {isCommissioner && (
-                        <TableCell>
-                          <ResendInviteButton leagueId={league.id} member={member} />
-                        </TableCell>
-                      )}
-                      {isCommissioner && (
-                        <TableCell>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Member</TableHead>
+                      <TableHead>Team</TableHead>
+                      <TableHead>Role</TableHead>
+                      <TableHead>Status</TableHead>
+                      {isCommissioner && <TableHead>Invite</TableHead>}
+                      {isCommissioner && <TableHead>Remind</TableHead>}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {league.members.map((member: any) => (
+                      <TableRow key={member.id}>
+                        <TableCell className="font-medium">
                           <div className="flex items-center gap-2">
-                            <SendReminderButton leagueId={league.id} memberId={member.id} hasPhone={!!member.phoneNumber} hasEmail={!!member.email} paidStatus={member.paidStatus} />
+                            {isCommissioner && <EditMemberDialog leagueId={league.id} member={member} />}
+                            <span className="truncate max-w-[120px]">
+                              {member.ownerName || (member.user ? `${member.user.firstName || ''} ${member.user.lastName || ''}`.trim() : `User ${member.userId.slice(0,4)}...`)}
+                            </span>
                           </div>
                         </TableCell>
-                      )}
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                        <TableCell className="truncate max-w-[100px]">{member.teamName}</TableCell>
+                        <TableCell className="capitalize">{member.role}</TableCell>
+                        <TableCell>
+                          <Badge variant={member.paidStatus === 'paid' ? 'default' : 'destructive'} className="capitalize">
+                            {member.paidStatus}
+                          </Badge>
+                        </TableCell>
+                        {isCommissioner && (
+                          <TableCell>
+                            <SendInviteButton leagueId={league.id} member={member} />
+                          </TableCell>
+                        )}
+                        {isCommissioner && (
+                          <TableCell>
+                            <SendReminderButton leagueId={league.id} memberId={member.id} hasPhone={!!member.phoneNumber} hasEmail={!!member.email} paidStatus={member.paidStatus} />
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
               
               {isCommissioner && <PendingInvitesSection leagueId={league.id} />}
             </CardContent>
@@ -2501,85 +2503,165 @@ function EditLeagueNameDialog({ leagueId, currentName }: { leagueId: number; cur
   );
 }
 
-function ResendInviteButton({ leagueId, member }: { leagueId: number; member: any }) {
+function SendInviteButton({ leagueId, member }: { leagueId: number; member: any }) {
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
-  
-  const resendInvite = useMutation({
-    mutationFn: async (method: 'sms' | 'email') => {
+  const [phoneNumber, setPhoneNumber] = useState(member.phoneNumber || "");
+  const [email, setEmail] = useState(member.email || "");
+  const [sendMethod, setSendMethod] = useState<'sms' | 'email' | null>(null);
+
+  const updateAndSend = useMutation({
+    mutationFn: async ({ method, phone, emailAddr }: { method: 'sms' | 'email'; phone?: string; emailAddr?: string }) => {
+      // First update contact info if provided
+      if (phone || emailAddr) {
+        const updateRes = await apiRequest('PATCH', `/api/leagues/${leagueId}/members/${member.id}`, {
+          phoneNumber: phone || member.phoneNumber,
+          email: emailAddr || member.email
+        });
+        if (!updateRes.ok) {
+          const data = await updateRes.json();
+          throw new Error(data.message || 'Failed to update contact info');
+        }
+      }
+      
+      // Then send the invite
       const res = await apiRequest('POST', `/api/leagues/${leagueId}/members/${member.id}/resend-invite`, { method });
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.message || 'Failed to resend invite');
+        throw new Error(data.message || 'Failed to send invite');
       }
       return res.json();
     },
     onSuccess: (data) => {
       setOpen(false);
-      toast({ title: "Invite sent!", description: data.message || "Invite has been resent." });
+      setSendMethod(null);
+      queryClient.invalidateQueries({ queryKey: ['/api/leagues', leagueId] });
+      toast({ title: "Invite sent!", description: data.message || "Invite has been sent." });
     },
     onError: (err: any) => {
       toast({ title: "Failed", description: err.message, variant: "destructive" });
     }
   });
 
+  const handleSend = (method: 'sms' | 'email') => {
+    if (method === 'sms' && !phoneNumber) {
+      setSendMethod('sms');
+      return;
+    }
+    if (method === 'email' && !email) {
+      setSendMethod('email');
+      return;
+    }
+    updateAndSend.mutate({ 
+      method, 
+      phone: method === 'sms' ? phoneNumber : undefined,
+      emailAddr: method === 'email' ? email : undefined
+    });
+  };
+
+  const handleSubmitContact = () => {
+    if (sendMethod === 'sms' && phoneNumber) {
+      updateAndSend.mutate({ method: 'sms', phone: phoneNumber });
+    } else if (sendMethod === 'email' && email) {
+      updateAndSend.mutate({ method: 'email', emailAddr: email });
+    }
+  };
+
   const hasPhone = !!member.phoneNumber;
   const hasEmail = !!member.email;
-  
-  if (!hasPhone && !hasEmail) {
-    return <span className="text-sm text-muted-foreground">No contact</span>;
-  }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setSendMethod(null); }}>
       <DialogTrigger asChild>
         <Button
           size="sm"
           variant="outline"
-          data-testid={`button-resend-invite-${member.id}`}
+          data-testid={`button-send-invite-${member.id}`}
         >
-          Resend
+          Send
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Resend Invite</DialogTitle>
+          <DialogTitle>Send Invite</DialogTitle>
           <DialogDescription>
-            Choose how to send the invite to this member.
+            Send an invite to {member.ownerName || member.teamName}
           </DialogDescription>
         </DialogHeader>
-        <div className="flex flex-col gap-3 py-4">
-          <Button
-            variant="outline"
-            className="justify-start gap-3"
-            onClick={() => resendInvite.mutate('sms')}
-            disabled={!hasPhone || resendInvite.isPending}
-            data-testid="button-resend-sms"
-          >
-            <Phone className="w-5 h-5" />
-            <div className="text-left">
-              <div className="font-medium">Send SMS</div>
-              <div className="text-sm text-muted-foreground">
-                {hasPhone ? 'Send text message invite' : 'No phone number on file'}
+        
+        {!sendMethod ? (
+          <div className="flex flex-col gap-3 py-4">
+            <Button
+              variant="outline"
+              className="justify-start gap-3"
+              onClick={() => handleSend('sms')}
+              disabled={updateAndSend.isPending}
+              data-testid="button-send-sms"
+            >
+              <Phone className="w-5 h-5" />
+              <div className="text-left">
+                <div className="font-medium">Send SMS</div>
+                <div className="text-sm text-muted-foreground">
+                  {hasPhone ? member.phoneNumber : 'Add phone number'}
+                </div>
               </div>
-            </div>
-          </Button>
-          <Button
-            variant="outline"
-            className="justify-start gap-3"
-            onClick={() => resendInvite.mutate('email')}
-            disabled={!hasEmail || resendInvite.isPending}
-            data-testid="button-resend-email"
-          >
-            <Mail className="w-5 h-5" />
-            <div className="text-left">
-              <div className="font-medium">Send Email</div>
-              <div className="text-sm text-muted-foreground">
-                {hasEmail ? 'Send email invite' : 'No email on file'}
+            </Button>
+            <Button
+              variant="outline"
+              className="justify-start gap-3"
+              onClick={() => handleSend('email')}
+              disabled={updateAndSend.isPending}
+              data-testid="button-send-email"
+            >
+              <Mail className="w-5 h-5" />
+              <div className="text-left">
+                <div className="font-medium">Send Email</div>
+                <div className="text-sm text-muted-foreground">
+                  {hasEmail ? member.email : 'Add email address'}
+                </div>
               </div>
-            </div>
-          </Button>
-        </div>
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-4 py-4">
+            {sendMethod === 'sms' ? (
+              <div className="space-y-2">
+                <Label>Phone Number</Label>
+                <Input
+                  placeholder="+1 (555) 123-4567"
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value)}
+                  data-testid="input-invite-phone"
+                />
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Label>Email Address</Label>
+                <Input
+                  type="email"
+                  placeholder="member@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  data-testid="input-invite-email"
+                />
+              </div>
+            )}
+            <DialogFooter className="flex gap-2">
+              <Button variant="outline" onClick={() => setSendMethod(null)}>Back</Button>
+              <Button 
+                onClick={handleSubmitContact}
+                disabled={updateAndSend.isPending || (sendMethod === 'sms' ? !phoneNumber : !email)}
+                data-testid="button-submit-invite"
+              >
+                {updateAndSend.isPending ? 'Sending...' : 'Send Invite'}
+              </Button>
+            </DialogFooter>
+          </div>
+        )}
+        
+        {updateAndSend.isPending && !sendMethod && (
+          <div className="text-center text-sm text-muted-foreground">Sending...</div>
+        )}
       </DialogContent>
     </Dialog>
   );
