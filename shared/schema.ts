@@ -63,6 +63,8 @@ export const leagueMembers = pgTable("league_members", {
   paidStatus: text("paid_status").notNull().default("unpaid"), // 'paid', 'unpaid', 'partial'
   paymentRequestSent: boolean("payment_request_sent").notNull().default(false), // Track if payment request was sent
   paymentRequestSentAt: timestamp("payment_request_sent_at"), // When the payment request was sent
+  paymentToken: text("payment_token"), // Unique token for payment link
+  paymentTokenExpiresAt: timestamp("payment_token_expires_at"), // Token expiration
   joinedAt: timestamp("joined_at").defaultNow(),
 });
 

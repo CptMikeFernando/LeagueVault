@@ -667,6 +667,89 @@ export async function registerRoutes(
     }
   });
 
+  // === MEMBER DUES PAYMENT (Public endpoint for payment token) ===
+  app.get("/api/pay-dues/:token", async (req: any, res) => {
+    try {
+      const { token } = req.params;
+      const member = await storage.getMemberByPaymentToken(token);
+      
+      if (!member) {
+        return res.status(404).json({ message: "Payment link not found or expired" });
+      }
+      
+      // Check if token has expired
+      if (member.paymentTokenExpiresAt && new Date(member.paymentTokenExpiresAt) < new Date()) {
+        return res.status(400).json({ message: "This payment link has expired" });
+      }
+      
+      // Check if already paid
+      if (member.paidStatus === 'paid') {
+        const league = await storage.getLeague(member.leagueId);
+        return res.json({
+          alreadyPaid: true,
+          leagueName: league?.name || 'Unknown League'
+        });
+      }
+
+      const league = await storage.getLeague(member.leagueId);
+      
+      // Check if the current user (if logged in) is linked to this member
+      const currentUserId = req.user?.claims?.sub;
+      const isLinked = currentUserId && member.userId === currentUserId;
+      
+      res.json({
+        memberId: member.id,
+        leagueId: member.leagueId,
+        leagueName: league?.name || 'Unknown League',
+        amount: league?.entryFee || '0',
+        teamName: member.teamName,
+        ownerName: member.ownerName,
+        isLinked: isLinked,
+        alreadyPaid: false
+      });
+    } catch (err) {
+      console.error("Error fetching dues payment:", err);
+      res.status(500).json({ message: "Failed to fetch payment details" });
+    }
+  });
+
+  app.post("/api/pay-dues/:token/link-account", isAuthenticated, async (req: any, res) => {
+    try {
+      const { token } = req.params;
+      const userId = req.user.claims.sub;
+      
+      const member = await storage.getMemberByPaymentToken(token);
+      
+      if (!member) {
+        return res.status(404).json({ message: "Payment link not found" });
+      }
+      
+      // Check if token has expired
+      if (member.paymentTokenExpiresAt && new Date(member.paymentTokenExpiresAt) < new Date()) {
+        return res.status(400).json({ message: "This payment link has expired" });
+      }
+      
+      // Security check: Only allow linking if member is unclaimed (placeholder ID) or already belongs to this user
+      const isPlaceholder = member.userId?.startsWith('espn-team-') || member.userId?.startsWith('yahoo-team-');
+      const isAlreadyLinked = member.userId === userId;
+      
+      if (!isPlaceholder && !isAlreadyLinked) {
+        return res.status(403).json({ message: "This team membership is already linked to another account" });
+      }
+      
+      // Link the member to this user's account
+      await storage.linkMemberToUser(member.id, userId);
+      
+      // Clear the payment token after successful linking to prevent reuse
+      await storage.setMemberPaymentToken(member.id, '');
+      
+      res.json({ success: true, message: "Account linked successfully" });
+    } catch (err) {
+      console.error("Error linking account:", err);
+      res.status(500).json({ message: "Failed to link account" });
+    }
+  });
+
   // === PAYOUTS ===
   // Instant payout fee percentage (e.g., 2.5% for instant payouts)
   const INSTANT_PAYOUT_FEE_PERCENT = 2.5;
@@ -1984,13 +2067,13 @@ export async function registerRoutes(
       const baseUrl = process.env.REPLIT_DEV_DOMAIN 
         ? `https://${process.env.REPLIT_DEV_DOMAIN}` 
         : 'https://your-app.replit.app';
-      const leagueUrl = `${baseUrl}/leagues/${leagueId}`;
 
       let sentCount = 0;
       let skippedCount = 0;
 
       const { sendSMS, isTwilioConfigured } = await import('./twilio');
       const { sendReminderEmail } = await import('./sendgrid');
+      const crypto = await import('crypto');
       const twilioReady = await isTwilioConfigured();
 
       for (const member of league.members || []) {
@@ -2005,11 +2088,16 @@ export async function registerRoutes(
           continue;
         }
 
+        // Generate a unique payment token for this member
+        const paymentToken = crypto.randomBytes(32).toString('hex');
+        await storage.setMemberPaymentToken(member.id, paymentToken);
+        const paymentUrl = `${baseUrl}/pay-dues/${paymentToken}`;
+
         let sent = false;
 
         // Try SMS first if available
         if (hasPhone && twilioReady) {
-          const message = `Hey, nerd. You still haven't paid your dues for ${league.name}. Pay up or shut up.\n\n${leagueUrl}`;
+          const message = `Hey, nerd. You still haven't paid your dues for ${league.name}. Pay up or shut up.\n\nPay here: ${paymentUrl}`;
           const smsResult = await sendSMS(member.phoneNumber, message);
           if (smsResult.success) {
             sent = true;
@@ -2018,7 +2106,7 @@ export async function registerRoutes(
 
         // Try email if SMS wasn't sent or failed
         if (!sent && hasEmail) {
-          const result = await sendReminderEmail(member.email, league.name, leagueUrl);
+          const result = await sendReminderEmail(member.email, league.name, paymentUrl);
           if (result.success) {
             sent = true;
           }
@@ -2069,14 +2157,19 @@ export async function registerRoutes(
       const baseUrl = process.env.REPLIT_DEV_DOMAIN 
         ? `https://${process.env.REPLIT_DEV_DOMAIN}` 
         : 'https://your-app.replit.app';
-      const leagueUrl = `${baseUrl}/leagues/${leagueId}`;
+      
+      // Generate a unique payment token for this member
+      const crypto = await import('crypto');
+      const paymentToken = crypto.randomBytes(32).toString('hex');
+      await storage.setMemberPaymentToken(memberId, paymentToken);
+      const paymentUrl = `${baseUrl}/pay-dues/${paymentToken}`;
 
       if (method === 'email') {
         if (!member.email) {
           return res.status(400).json({ message: "Member does not have an email address" });
         }
         const { sendReminderEmail } = await import('./sendgrid');
-        const result = await sendReminderEmail(member.email, league.name, leagueUrl);
+        const result = await sendReminderEmail(member.email, league.name, paymentUrl);
         if (result.success) {
           await storage.createPaymentReminder({
             leagueId,
@@ -2101,7 +2194,7 @@ export async function registerRoutes(
           return res.status(400).json({ message: "SMS not configured" });
         }
 
-        const message = `Hey, nerd. You still haven't paid your dues for ${league.name}. Pay up or shut up.\n\n${leagueUrl}`;
+        const message = `Hey, nerd. You still haven't paid your dues for ${league.name}. Pay up or shut up.\n\nPay here: ${paymentUrl}`;
         
         const smsResult = await sendSMS(member.phoneNumber, message);
         

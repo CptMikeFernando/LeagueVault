@@ -262,6 +262,33 @@ export class DatabaseStorage implements IStorage {
     }).where(eq(leagueMembers.id, id));
   }
 
+  async setMemberPaymentToken(id: number, token: string): Promise<void> {
+    if (token) {
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 30); // Token valid for 30 days
+      await db.update(leagueMembers).set({ 
+        paymentToken: token,
+        paymentTokenExpiresAt: expiresAt
+      }).where(eq(leagueMembers.id, id));
+    } else {
+      // Clear the token
+      await db.update(leagueMembers).set({ 
+        paymentToken: null,
+        paymentTokenExpiresAt: null
+      }).where(eq(leagueMembers.id, id));
+    }
+  }
+
+  async getMemberByPaymentToken(token: string): Promise<LeagueMember | undefined> {
+    const [member] = await db.select().from(leagueMembers)
+      .where(eq(leagueMembers.paymentToken, token));
+    return member;
+  }
+
+  async linkMemberToUser(memberId: number, userId: string): Promise<void> {
+    await db.update(leagueMembers).set({ userId }).where(eq(leagueMembers.id, memberId));
+  }
+
   async deleteLeagueMember(id: number): Promise<void> {
     await db.delete(leagueMembers).where(eq(leagueMembers.id, id));
   }

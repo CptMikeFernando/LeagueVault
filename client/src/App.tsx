@@ -14,6 +14,7 @@ import LeagueDetail from "@/pages/league-detail";
 import AdminDashboard from "@/pages/admin";
 import MyWallet from "@/pages/my-wallet";
 import PayLps from "@/pages/pay-lps";
+import PayDues from "@/pages/pay-dues";
 import { Shell } from "@/components/layout-shell";
 
 function Router() {
@@ -32,6 +33,7 @@ function Router() {
       <Switch>
         <Route path="/" component={Landing} />
         <Route path="/pay-lps/:token" component={PayLps} />
+        <Route path="/pay-dues/:token" component={PayDues} />
         <Route component={NotFound} />
       </Switch>
     );
@@ -47,6 +49,7 @@ function Router() {
         <Route path="/league/:id" component={LeagueDetail} />
         <Route path="/admin" component={AdminDashboard} />
         <Route path="/pay-lps/:token" component={PayLps} />
+        <Route path="/pay-dues/:token" component={PayDues} />
         <Route component={NotFound} />
       </Switch>
     </Shell>
