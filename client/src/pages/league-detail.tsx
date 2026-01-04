@@ -329,7 +329,7 @@ export default function LeagueDetail() {
                         <TableCell>
                           <Badge 
                             variant={member.paidStatus === 'paid' ? 'default' : 'destructive'} 
-                            className="capitalize"
+                            className={`capitalize ${member.paidStatus === 'paid' ? 'bg-green-600 hover:bg-green-700 text-white' : ''}`}
                           >
                             {member.paidStatus}
                           </Badge>
