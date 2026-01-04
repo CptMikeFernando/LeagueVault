@@ -292,7 +292,7 @@ export default function LeagueDetail() {
                 <CardTitle>League Members</CardTitle>
                 <CardDescription>{league.members.length} teams competing</CardDescription>
               </div>
-              {isCommissioner && <RequestAllPaymentsButton leagueId={league.id} />}
+              {isCommissioner && <RequestAllPaymentsButton leagueId={league.id} members={league.members} />}
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="overflow-x-auto">
@@ -2139,8 +2139,37 @@ function DeleteLeagueSection({ league }: { league: any }) {
   );
 }
 
-function RequestAllPaymentsButton({ leagueId }: { leagueId: number }) {
+function RequestAllPaymentsButton({ leagueId, members }: { leagueId: number; members: any[] }) {
   const { toast } = useToast();
+  const [open, setOpen] = useState(false);
+  const [contactInfo, setContactInfo] = useState<Record<number, { email: string; phone: string }>>({});
+  const [isSaving, setIsSaving] = useState(false);
+
+  const unpaidMembers = members.filter(m => m.paidStatus !== 'paid');
+  const membersWithoutContact = unpaidMembers.filter(m => !m.email && !m.phoneNumber);
+
+  const handleOpenDialog = () => {
+    const initial: Record<number, { email: string; phone: string }> = {};
+    membersWithoutContact.forEach(m => {
+      initial[m.id] = { email: '', phone: '' };
+    });
+    setContactInfo(initial);
+    setOpen(true);
+  };
+
+  const updateMemberContact = useMutation({
+    mutationFn: async ({ memberId, email, phone }: { memberId: number; email: string; phone: string }) => {
+      const res = await apiRequest('PATCH', `/api/leagues/${leagueId}/members/${memberId}`, {
+        email: email.trim() || null,
+        phoneNumber: phone.trim() || null
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || 'Failed to update member');
+      }
+      return res.json();
+    }
+  });
 
   const requestAllPayments = useMutation({
     mutationFn: async () => {
@@ -2157,21 +2186,112 @@ function RequestAllPaymentsButton({ leagueId }: { leagueId: number }) {
         title: "Payment requests sent!", 
         description: `Sent ${data.sentCount} payment request${data.sentCount !== 1 ? 's' : ''}. ${data.skippedCount} member${data.skippedCount !== 1 ? 's' : ''} had no contact info.`
       });
+      setOpen(false);
     },
     onError: (err: any) => {
       toast({ title: "Failed", description: err.message, variant: "destructive" });
     }
   });
 
+  const handleSendRequests = async () => {
+    setIsSaving(true);
+    try {
+      const updates = Object.entries(contactInfo)
+        .filter(([_, info]) => info.email || info.phone)
+        .map(([memberId, info]) => 
+          updateMemberContact.mutateAsync({ memberId: Number(memberId), email: info.email, phone: info.phone })
+        );
+      
+      if (updates.length > 0) {
+        await Promise.all(updates);
+        await queryClient.invalidateQueries({ queryKey: ['/api/leagues', leagueId] });
+      }
+      
+      requestAllPayments.mutate();
+    } catch (err: any) {
+      toast({ title: "Failed to save contact info", description: err.message, variant: "destructive" });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDirectSend = () => {
+    if (membersWithoutContact.length > 0) {
+      handleOpenDialog();
+    } else {
+      requestAllPayments.mutate();
+    }
+  };
+
   return (
-    <Button 
-      onClick={() => requestAllPayments.mutate()}
-      disabled={requestAllPayments.isPending}
-      data-testid="button-request-all-payments"
-    >
-      <DollarSign className="w-4 h-4 mr-2" />
-      {requestAllPayments.isPending ? 'Sending...' : 'Request All Payments'}
-    </Button>
+    <>
+      <Button 
+        onClick={handleDirectSend}
+        disabled={requestAllPayments.isPending}
+        data-testid="button-request-all-payments"
+      >
+        <DollarSign className="w-4 h-4 mr-2" />
+        {requestAllPayments.isPending ? 'Sending...' : 'Request All Payments'}
+      </Button>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Add Missing Contact Info</DialogTitle>
+            <DialogDescription>
+              The following unpaid members don't have email or phone numbers. Add their contact info to send payment requests.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            {membersWithoutContact.map((member) => (
+              <div key={member.id} className="border rounded-md p-3 space-y-2">
+                <p className="font-medium text-sm">{member.teamName || member.ownerName || 'Unknown Member'}</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Email</Label>
+                    <Input
+                      type="email"
+                      placeholder="email@example.com"
+                      value={contactInfo[member.id]?.email || ''}
+                      onChange={(e) => setContactInfo(prev => ({
+                        ...prev,
+                        [member.id]: { ...prev[member.id], email: e.target.value }
+                      }))}
+                      data-testid={`input-member-email-${member.id}`}
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Phone</Label>
+                    <Input
+                      type="tel"
+                      placeholder="+1234567890"
+                      value={contactInfo[member.id]?.phone || ''}
+                      onChange={(e) => setContactInfo(prev => ({
+                        ...prev,
+                        [member.id]: { ...prev[member.id], phone: e.target.value }
+                      }))}
+                      data-testid={`input-member-phone-${member.id}`}
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+            {membersWithoutContact.length === 0 && (
+              <p className="text-muted-foreground text-center py-4">All unpaid members have contact info!</p>
+            )}
+          </div>
+          <DialogFooter className="flex gap-2">
+            <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button 
+              onClick={handleSendRequests}
+              disabled={isSaving || requestAllPayments.isPending}
+            >
+              {isSaving ? 'Saving...' : requestAllPayments.isPending ? 'Sending...' : 'Save & Send Requests'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
