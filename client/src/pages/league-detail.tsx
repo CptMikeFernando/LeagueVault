@@ -2936,7 +2936,7 @@ function MessageBoard({ leagueId }: { leagueId: number }) {
             </p>
           ) : (
             <div className="space-y-4 flex flex-col">
-              {messages?.map((msg: any) => (
+              {[...messages].reverse().map((msg: any) => (
                 <div key={msg.id} className="flex gap-3 group" data-testid={`message-${msg.id}`}>
                   <Avatar className="h-8 w-8">
                     <AvatarFallback>
