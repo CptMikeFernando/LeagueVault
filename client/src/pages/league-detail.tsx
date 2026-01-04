@@ -2605,17 +2605,13 @@ function SendReminderButton({ leagueId, member }: { leagueId: number; member: an
   const hasPhone = !!member.phoneNumber;
   const hasEmail = !!member.email;
 
-  if (member.paidStatus === 'paid') {
-    return <Badge className="bg-green-600 hover:bg-green-700 text-white">Complete</Badge>;
-  }
-
-  // Show "Sent" if payment request was sent within last 24 hours
+  // Show "Sent" if member has paid OR if payment request was sent within last 24 hours
   const isRecentRequest = member.paymentRequestSent && member.paymentRequestSentAt && 
     (new Date().getTime() - new Date(member.paymentRequestSentAt).getTime()) < 24 * 60 * 60 * 1000;
   
-  if (isRecentRequest) {
+  if (member.paidStatus === 'paid' || isRecentRequest) {
     return (
-      <Badge className="bg-green-600 text-white" data-testid={`badge-sent-${member.id}`}>
+      <Badge className="bg-green-600 hover:bg-green-700 text-white" data-testid={`badge-sent-${member.id}`}>
         Sent
       </Badge>
     );
