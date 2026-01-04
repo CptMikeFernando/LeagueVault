@@ -59,6 +59,8 @@ import {
   ThumbsDown
 } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import Icon from '@mdi/react';
+import { mdiEmoticonPoop } from '@mdi/js';
 import { useState } from "react";
 import { format } from "date-fns";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -3027,7 +3029,7 @@ function WeeklyScoresWidget({ leagueId, members }: { leagueId: number; members: 
                   <div className="flex items-center gap-2">
                     <span className="text-muted-foreground text-sm w-6">{index + 1}.</span>
                     {isHighest && <Crown className="w-4 h-4 text-yellow-500" />}
-                    {isLowest && <span className="text-sm">&#x1F4A9;</span>}
+                    {isLowest && <Icon path={mdiEmoticonPoop} size={0.7} color="#8B4513" />}
                     <span className="font-medium text-sm">{getMemberName(score.userId)}</span>
                   </div>
                   <span className={`font-mono text-sm font-medium ${
