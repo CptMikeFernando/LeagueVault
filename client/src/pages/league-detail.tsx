@@ -1238,6 +1238,7 @@ function TreasuryTab({ leagueId }: { leagueId: number }) {
 function SyncScoresForm({ league }: { league: any }) {
   const [week, setWeek] = useState("1");
   const [lastResult, setLastResult] = useState<any>(null);
+  const [allWeeksResult, setAllWeeksResult] = useState<any>(null);
   const { toast } = useToast();
   
   const syncScores = useMutation({
@@ -1285,6 +1286,29 @@ function SyncScoresForm({ league }: { league: any }) {
     }
   });
 
+  const syncAllWeeks = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest('POST', `/api/leagues/${league.id}/sync-all-weeks`, {});
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/leagues', league.id] });
+      setAllWeeksResult(data);
+      
+      toast({
+        title: "All Weeks Synced",
+        description: `Synced ${data.weeksWithScores} weeks with ${data.totalScoresAdded} total scores from ESPN.`,
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Sync Failed",
+        description: "Could not sync all weeks. Check ESPN configuration.",
+        variant: "destructive",
+      });
+    }
+  });
+
   const handleSync = (e: React.FormEvent) => {
     e.preventDefault();
     syncScores.mutate({ week: Number(week) });
@@ -1309,19 +1333,59 @@ function SyncScoresForm({ league }: { league: any }) {
           Last synced: {format(new Date(league.settings.lastScoreSync), 'MMM d, yyyy h:mm a')}
         </p>
       )}
-      <Button type="submit" className="w-full" disabled={syncScores.isPending} data-testid="button-sync-scores">
-        {syncScores.isPending ? (
-          <>
-            <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-            Syncing...
-          </>
-        ) : (
-          <>
-            <RefreshCw className="w-4 h-4 mr-2" />
-            Sync Week {week} Scores
-          </>
+      <div className="flex gap-2">
+        <Button type="submit" className="flex-1" disabled={syncScores.isPending || syncAllWeeks.isPending} data-testid="button-sync-scores">
+          {syncScores.isPending ? (
+            <>
+              <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+              Syncing...
+            </>
+          ) : (
+            <>
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Sync Week {week}
+            </>
+          )}
+        </Button>
+        
+        {league.platform === 'espn' && league.settings?.espnLeagueId && (
+          <Button 
+            type="button" 
+            variant="outline"
+            className="flex-1" 
+            disabled={syncScores.isPending || syncAllWeeks.isPending}
+            onClick={() => syncAllWeeks.mutate()}
+            data-testid="button-sync-all-weeks"
+          >
+            {syncAllWeeks.isPending ? (
+              <>
+                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                Syncing All...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Sync All Weeks
+              </>
+            )}
+          </Button>
         )}
-      </Button>
+      </div>
+      
+      {allWeeksResult && (
+        <div className="text-xs space-y-1 p-3 bg-muted rounded-lg" data-testid="sync-all-weeks-results">
+          <p className="font-medium">Season Sync Results:</p>
+          <p className="text-green-600">Weeks with scores: {allWeeksResult.weeksWithScores} of 18</p>
+          <p>Total scores added: {allWeeksResult.totalScoresAdded}</p>
+          <div className="max-h-32 overflow-y-auto mt-2 space-y-1">
+            {allWeeksResult.results?.map((r: any) => (
+              <p key={r.week} className={r.scoresUpdated > 0 ? 'text-green-600' : 'text-muted-foreground'}>
+                Week {r.week}: {r.scoresUpdated > 0 ? `${r.scoresUpdated} scores` : (r.error || 'No data')}
+              </p>
+            ))}
+          </div>
+        </div>
+      )}
       
       {lastResult?.automation && (
         <div className="text-xs space-y-1 p-3 bg-muted rounded-lg" data-testid="sync-automation-results">

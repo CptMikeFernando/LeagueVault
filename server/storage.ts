@@ -59,6 +59,7 @@ export interface IStorage {
   getLeagueTransactions(leagueId: number): Promise<{ payments: Payment[], payouts: Payout[] }>;
   
   addWeeklyScore(score: InsertWeeklyScore): Promise<WeeklyScore>;
+  updateWeeklyScore(id: number, score: string): Promise<void>;
   getWeeklyScores(leagueId: number, week: number): Promise<WeeklyScore[]>;
   getHighestScorerForWeek(leagueId: number, week: number): Promise<WeeklyScore | undefined>;
   getLowestScorerForWeek(leagueId: number, week: number): Promise<WeeklyScore | undefined>;
@@ -339,6 +340,10 @@ export class DatabaseStorage implements IStorage {
       source: score.source || 'manual'
     }).returning();
     return newScore;
+  }
+
+  async updateWeeklyScore(id: number, score: string): Promise<void> {
+    await db.update(weeklyScores).set({ score }).where(eq(weeklyScores.id, id));
   }
 
   async getWeeklyScores(leagueId: number, week: number): Promise<WeeklyScore[]> {

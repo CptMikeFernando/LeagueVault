@@ -355,6 +355,109 @@ export async function registerRoutes(
     }
   });
 
+  // Sync ALL weeks from ESPN (season bulk sync)
+  app.post("/api/leagues/:id/sync-all-weeks", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const leagueId = Number(req.params.id);
+      
+      const league = await storage.getLeague(leagueId);
+      if (!league) {
+        return res.status(404).json({ message: "League not found" });
+      }
+      
+      if (league.commissionerId !== userId) {
+        return res.status(403).json({ message: "Only commissioner can sync scores" });
+      }
+
+      const settings = league.settings || {};
+      
+      if (league.platform !== 'espn' || !settings.espnLeagueId) {
+        return res.status(400).json({ message: "ESPN integration not configured for this league" });
+      }
+
+      const { fetchEspnScores } = await import('./espn-api');
+      const seasonId = settings.espnSeasonId || '2025';
+      const cookies = settings.espnPrivateLeague ? {
+        espnS2: settings.espnS2,
+        swid: settings.espnSwid
+      } : undefined;
+
+      const members = league.members || [];
+      const results: Array<{ week: number; success: boolean; scoresUpdated: number; error?: string }> = [];
+      
+      // Sync weeks 1-18
+      for (let week = 1; week <= 18; week++) {
+        try {
+          // Add small delay between requests to avoid rate limiting
+          if (week > 1) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+
+          const espnResult = await fetchEspnScores(settings.espnLeagueId, seasonId, week, cookies);
+          
+          if (!espnResult.success || !espnResult.data) {
+            results.push({ week, success: false, scoresUpdated: 0, error: espnResult.error });
+            continue;
+          }
+
+          // Get existing scores for this week
+          const existingScores = await storage.getWeeklyScores(leagueId, week);
+          let scoresUpdated = 0;
+
+          for (const member of members) {
+            if (member.externalTeamId) {
+              const espnScore = espnResult.data.weeklyScores.get(Number(member.externalTeamId));
+              if (espnScore !== undefined && espnScore > 0) {
+                const existing = existingScores.find(s => s.userId === member.userId);
+                
+                if (!existing) {
+                  await storage.addWeeklyScore({
+                    leagueId,
+                    userId: member.userId,
+                    week,
+                    score: String(espnScore.toFixed(2)),
+                    source: 'espn'
+                  });
+                  scoresUpdated++;
+                } else if (Number(existing.score) !== espnScore) {
+                  // Update if score changed
+                  await storage.updateWeeklyScore(existing.id, String(espnScore.toFixed(2)));
+                  scoresUpdated++;
+                }
+              }
+            }
+          }
+
+          results.push({ week, success: true, scoresUpdated });
+        } catch (weekErr) {
+          console.error(`Error syncing week ${week}:`, weekErr);
+          results.push({ week, success: false, scoresUpdated: 0, error: 'Internal error' });
+        }
+      }
+
+      // Update lastScoreSync timestamp
+      await storage.updateLeagueSettings(leagueId, {
+        ...settings,
+        lastScoreSync: new Date().toISOString()
+      });
+
+      const totalWeeksWithScores = results.filter(r => r.success && r.scoresUpdated > 0).length;
+      const totalScoresAdded = results.reduce((sum, r) => sum + r.scoresUpdated, 0);
+
+      res.json({ 
+        success: true,
+        weeksProcessed: 18,
+        weeksWithScores: totalWeeksWithScores,
+        totalScoresAdded,
+        results
+      });
+    } catch (err) {
+      console.error("Error syncing all weeks:", err);
+      res.status(500).json({ message: "Failed to sync all weeks" });
+    }
+  });
+
   // Sync scores from platform (ESPN API or mock)
   app.post(api.leagues.syncScores.path, isAuthenticated, async (req: any, res) => {
     try {
