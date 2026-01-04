@@ -536,7 +536,7 @@ function PayDuesDialog({ league, userId, amount }: { league: any, userId: string
       <DialogTrigger asChild>
         <Button size="sm">Pay Dues</Button>
       </DialogTrigger>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Secure Checkout</DialogTitle>
           <DialogDescription>Pay your season dues securely via Stripe.</DialogDescription>
