@@ -33,7 +33,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <header className="sticky top-0 z-40 w-full border-b bg-card/80 backdrop-blur-sm">
-        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
+        <div className="w-full px-4 md:px-6 h-16 flex items-center justify-between gap-4">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2 group cursor-pointer">
             <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center group-hover:bg-primary/20 transition-colors">
